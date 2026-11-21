@@ -1,8 +1,7 @@
-node_modules/
-dist/
-.idea/
+# Local editor / tool folders
 .claude/
+.idea/
 .DS_Store
 .env
-.env.*
-!.env.example
+node_modules/
+/*outputs/
