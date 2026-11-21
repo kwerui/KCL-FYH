@@ -73,12 +73,22 @@ Choose simple, understandable numbers (e.g. 0–100). Avoid a pet-death mechanic
 - **Speech output:** browser `speechSynthesis` to speak the pet's text; include **mute** and avoid auto-playing audio before the user interacts.
 - Show transcription in the chat box before sending; handle microphone permissions and unsupported browsers gracefully.
 
-### Conversation engine
-**Path A — safer for a short hackathon:** Local scripted/rule-based replies tailored to each mode, care state and evolution, with some variation and real interactivity.
+### Conversation engine — AI teammate owns this
 
-**Path B — stretch if one teammate owns it:** Connect an LLM through a secure server-side endpoint with a mode-specific system instruction and small, permissioned memory context. Keep keys on the server only, rate-limit where possible, and retain Path A as the fallback.
+**Preferred path:** Use a pre-trained model or hosted LLM API with **custom mode/personality instructions**, a small structured memory context and an endpoint that adheres to the shared interface below. This gives the creature genuinely useful conversation and is a better seven-hour priority than trying to train an LLM from scratch.
 
-**Never expose an API key inside browser JavaScript, the repo or the judging demo.** Text chat and all pet interactions should still work when the voice/LLM service fails.
+**Reliability path:** Ship a local scripted/rule-based responder for each mode; the app must still be playable if the model, internet, microphone or API credits fail.
+
+**"LLM training" workstream (time-boxed):**
+1. Pick a model/provider with an accessible API or runnable local inference **first**.
+2. Make the end-to-end request return a response matching the agreed TypeScript types.
+3. Write a tiny curated set of sample prompts for Silly, Serious, Study and Companion; test personality consistency, output length, safety and response latency.
+4. Iterate prompts using these evaluations; this is **prompt engineering and evaluation, not model training**.
+5. **Optional stretch:** Try LoRA/fine-tuning on an existing small model if the working API and full MVP are already stable, and there is enough hardware, dataset and time. Avoid training from scratch.
+
+Personality evolution scores and opt-in memories come from application state; **training or prompting alone does not create persistent memory**.
+
+Keep API credentials server-side (e.g. a lightweight Node endpoint or serverless function) with safe environment variables. Do not expose a paid API key in React/Vite code or GitHub. Text chat and pet-care interactions must still function when AI is unavailable.
 
 ## 6. MVP vs optional
 
@@ -97,9 +107,10 @@ Choose simple, understandable numbers (e.g. 0–100). Avoid a pet-death mechanic
 
 ### Add only if ahead of schedule
 - More mini-games and study activities.
-- Fully integrated LLM conversation through a secure backend.
-- User-approved remembered facts from conversation.
+- Live LLM conversation through a secure backend (the AI teammate should aim to make this work early, but **it must not block the MVP**).
+- Optional user-approved remembered facts from conversation.
 - Sound effects, hatching animations and 3+ unique evolution sprites.
+- Lightweight LoRA fine-tuning **only after** a working AI API and reliable full-game demo.
 - Multiple creatures, clothing/accessories, badges or streaks.
 - Progressive offline capabilities.
 
@@ -108,56 +119,97 @@ Accounts, multiplayer, vector databases, long-term cloud memory, custom voice mo
 
 ## 7. Suggested architecture
 
-**Primary stack:** React + Vite + TypeScript + CSS. Keep the MVP frontend-first and locally runnable.
+**Primary stack:** React + Vite + TypeScript + CSS. The main pet app is frontend-first and locally runnable. An LLM provider, if integrated, uses a **separate secure API/serverless endpoint**; never directly embed a secret key in the browser.
 
 ```text
 src/
   components/
     TamagotchiShell.tsx        # pixel device frame and screen
-    PetSprite.tsx             # creature expression, animations, evolution
-    CareControls.tsx          # feed, play, rest
+    PetSprite.tsx              # creature expressions, animations, evolution
+    CareControls.tsx           # feed, play, rest
     ModeSelector.tsx
     ChatPanel.tsx
     VoiceControls.tsx
     StatusMeters.tsx
   game/
-    petState.ts               # types, initial state and persistence
-    careLogic.ts              # deterministic care actions
-    evolutionLogic.ts         # trait scoring and forms
-    dialogue.ts               # reliable mode-specific fallback
+    petState.ts                # shared types, initial state and persistence
+    careLogic.ts               # deterministic care actions
+    evolutionLogic.ts          # trait scores, forms
+    activities.ts              # timer or simple mini-game
+    dialogueFallback.ts        # offline mode-specific replies
+  ai/
+    types.ts                   # the shared PetRequest / PetResponse contract
+    client.ts                  # sends requests to secure endpoint, falls back locally
   hooks/
-    useSpeech.ts              # recognition, synthesis + fallback
+    useSpeech.ts               # microphone and speech synthesis + fallbacks
   styles/
     retro.css
+server/                         # OPTIONAL if hosted AI model is used
+  ...                           # endpoint and provider integration; server-side secrets
 ```
 
 **Suggested state fields:** `petName`, `hunger`, `energy`, `happiness`, `mode`, `curiosity`, `playfulness`, `friendship`, `evolution`, `savedFacts`.
 
-**Implementation approach:** Separate game logic from UI. Mutate state through small actions; derive expressions/evolutions from state. Keep voice APIs optional, not on the critical rendering path. Do not let simultaneous changes create conflicting pet states.
+**Integration principle:** Separate UI from game logic and AI. React should not depend on a particular model/provider. The voice system converts input to text, hands it to conversation flow, then speaks the returned reply. The AI response cannot directly mutate care/evolution stats: game logic owns those actions.
 
-## 8. Three-person responsibility split
+## 8. Three-person responsibility split — agreed direction
 
-| Owner | Main deliverable | Integration boundary |
-|---|---|---|
-| **A — Pet UI / frontend** | Pixel pet, responsive shell, status meters, care controls, animations | Imports shared pet-state types/actions |
-| **B — Voice / chat / modes** | Microphone input, speech output, chat interface, distinct mode responses | Reads mode + pet traits, emits dialogue actions |
-| **C — Evolution / persistence / activities** | Care and evolution logic, localStorage, focus timer or mini-game, testing | Exports shared state/actions and utility functions |
+Three clear workstreams; one teammate explicitly owns the LLM experimentation. **Owners' names and assignments are to be confirmed**, except that the teammate interested in LLM training will take the AI role.
 
-Agree on names/types and branch ownership before parallel implementation. Merge frequently, with a single person responsible for integration.
+| Person | Role | Responsibilities | Concrete deliverable | Suggested branch |
+|---|---|---|---|---|
+| **1 — AI / LLM Engineer** (teammate who wants model training) | Conversation intelligence | Choose existing model/API, design prompts for four modes, build/test dialogue evaluation set, create secure inference endpoint or adapter, compare responses; optional small-model LoRA only if time remains | A `generatePetReply(request)` service returning a typed answer; reliable provider/fallback handoff | `feature/llm` |
+| **2 — Pet Frontend Engineer** (suggested: project owner) | Experience & visual design | Pixel Tamagotchi shell/sprites, animations, mode selector, chat UI, care buttons, status meters, evolution visuals, responsive polish | Playable UI using mock data while API/game logic are developed | `feature/frontend` |
+| **3 — Voice & Game Systems Engineer** (remaining teammate) | Behaviour & integration | Speech-to-text, text-to-speech, shared pet state, feeding/play/rest, trait evolution, localStorage, one mode-specific activity, integration of AI response into UI | Functional voice/text → response → pet reaction flow, care/evolution/persistence, tests | `feature/game-voice` |
+
+**Merge strategy:** All three branch from `main`; avoid editing the same central files simultaneously. Person 3 coordinates integration of game state and AI service with the frontend; Person 2 does final UI integration/polish. Open small pull requests and integrate an early mocked end-to-end flow before extending features. Nobody waits for LLM training to finish.
+
+### Shared AI interface (agree on this before writing parallel features)
+
+```ts
+export type PetMode = "silly" | "serious" | "study" | "companion";
+
+export type PetRequest = {
+  message: string;
+  mode: PetMode;
+  petName: string;
+  personality: {
+    curiosity: number;
+    playfulness: number;
+    friendship: number;
+  };
+  memories: string[]; // only user-approved facts
+};
+
+export type PetResponse = {
+  reply: string;
+  emotion: "happy" | "sad" | "excited" | "thinking";
+};
+
+// Returns the same shape whether using an LLM or a local fallback.
+export async function generatePetReply(request: PetRequest): Promise<PetResponse>;
+```
+
+**First integration test:** UI sends `{ message: "Can we study Python?", mode: "study", ... }` → AI/fallback returns `{ reply: "...", emotion: "excited" }` → UI shows speech bubble and animates expression → optional browser TTS reads reply. No database, accounts, or fine-tuning should be needed for this test.
+
+### Definition of done by role
+- **AI engineer:** demo each of four modes returning distinct answers; provider errors fall back cleanly; no leaked secrets.
+- **Frontend engineer:** can hatch, see/care for pet, change modes, read conversation, observe at least two expressive/evolved visuals; mobile/laptop reasonable.
+- **Voice/game engineer:** can type/speak where supported, hear a reply, increase stats, persist and reload state, trigger evolution; mic permission refusal doesn't break game.
 
 ## 9. One-day timeline
 
 | Time | Checkpoint |
 |---|---|
-| **11:00–11:30** | Finalise concept, freeze MVP and interfaces, start actual Air agent sessions |
-| **11:30–13:00** | Build Tamagotchi screen + pet state + basic care interactions |
-| **13:00–14:30** | Add text chat, mode responses, voice controls/fallback |
-| **14:30–15:30** | Personality trait changes, evolution visuals and persistence |
-| **15:30–16:30** | Finish one mode-specific activity; integrate and test on one machine |
-| **16:30–17:30** | Test mic/no-mic flows, polish, README, rehearse demo, draft submission |
-| **17:30–18:00** | Final smoke test and submit **before 18:00** |
+| **11:00–11:30** | Agree roles, API contract, art direction, one activity and branch ownership; start real JetBrains Air sessions |
+| **11:30–13:00** | Parallel: frontend pet shell; voice/game state & fallback; AI teammate selects model and proves first response |
+| **13:00–14:30** | First integration: mode-aware text response displayed in UI, care stats working, speech synthesis and mic fallback |
+| **14:30–15:30** | Personality evolution + localStorage + one activity; improve distinct AI modes and voice handling |
+| **15:30–16:30** | Full end-to-end demo; stop speculative training if anything critical is incomplete |
+| **16:30–17:30** | Test mic/no-mic, offline/API-failure flows, polish, README, judge demo rehearsal, submission draft |
+| **17:30–18:00** | Smoke test and submit **before 18:00** |
 
-**If running late:** Preserve hatch → care → switch mode → talk → evolve. Cut LLM, extra activities, multiple animations and advanced memory first.
+**If behind:** Preserve hatch → care → switch mode → talk (local fallback acceptable) → evolve. Cut fine-tuning, extra activities, multiple animations, elaborate memory and advanced AI first.
 
 ## 10. Snowflake prize — decision
 
@@ -183,7 +235,9 @@ The event requires participants to **build using JetBrains Air**. Installing Int
 - [ ] Which one activity is guaranteed for judging: Study timer, Silly mini-game or both?
 - [ ] Is an external AI model feasible with the team's accounts, credentials and time? If not, use local mode-specific dialogue.
 - [ ] What action threshold triggers the first evolution? Make it achievable during the judge demo.
-- [ ] Confirm owner A/B/C and Git branch strategy.
+- [ ] Confirm Person 1 (LLM), Person 2 (frontend) and Person 3 (voice/game) owners; decide who handles final merges.
+- [ ] Agree and share the PetRequest/PetResponse contract before parallel work.
+- [ ] Select an accessible LLM provider, with a local scripted fallback; decide whether fine-tuning is realistic.
 
 ## 13. Two-minute judging demo
 
