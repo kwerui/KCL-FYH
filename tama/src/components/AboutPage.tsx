@@ -1,5 +1,6 @@
 import type { SpeciesId } from "../art/pets";
-import { HowItWorks, PetGallery, ShellGallery } from "./Galleries";
+import { PetGallery, ShellGallery } from "./Galleries";
+import { RLExplainer } from "./RLExplainer";
 
 type Props = {
   hatched: boolean;
@@ -46,7 +47,7 @@ export function AboutPage({ hatched, petName, species, onPlay, skinId, onPickSki
             <span className="eyebrow pixel">HOW IT LEARNS</span>
             <h2>The original needed you. This one grows with you.</h2>
           </div>
-          <HowItWorks />
+          <RLExplainer />
         </div>
       </section>
     </>

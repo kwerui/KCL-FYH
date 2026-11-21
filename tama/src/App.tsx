@@ -34,7 +34,6 @@ import { BrainCard } from "./components/BrainCard";
 import { Footer, Header, type Page } from "./components/Brand";
 import { CareControls } from "./components/CareControls";
 import { Popup } from "./components/Popup";
-import { RLExplainer } from "./components/RLExplainer";
 import { ChatPanel, type ChatMsg } from "./components/ChatPanel";
 import { EvolutionCard } from "./components/EvolutionCard";
 import { HabitCard } from "./components/HabitCard";
@@ -44,7 +43,7 @@ import { AboutPage } from "./components/AboutPage";
 import { HomePage } from "./components/HomePage";
 import { LcdScene, type Fx, type FxKind } from "./components/LcdScene";
 import { MODES } from "./components/ModeSelector";
-import { HatchCard, StatusMeters } from "./components/StatusMeters";
+import { HatchCard, PetDetails, PetSummary } from "./components/StatusMeters";
 import { ICONS, TamagotchiShell, type IconId } from "./components/TamagotchiShell";
 
 const TICK_MS = 1000;
@@ -88,7 +87,7 @@ export default function App() {
     window.location.hash.startsWith("#/about") ? "about" : "home"
   );
   const scrollTarget = useRef<string | null>(null);
-  const [panel, setPanel] = useState<null | "talk" | "stats" | "style" | "attention">(null);
+  const [panel, setPanel] = useState<null | "talk" | "stats" | "style" | "attention" | "help">(null);
   const closePanel = useCallback(() => setPanel(null), []);
 
   const nameRef = useRef<HTMLInputElement>(null);
@@ -582,7 +581,7 @@ export default function App() {
           break;
       }
     },
-    [doCare, petSays, setMode, tapEgg],
+    [doCare, setMode, tapEgg],
   );
 
   const onIcon = useCallback(
@@ -662,7 +661,7 @@ export default function App() {
         ) : (
           <>
             <section className="pet-stage">
-              <div className="wrap stage-grid">
+              <div className="wrap pet-play-wrap">
                 <div className="hero-device" ref={deviceRef}>
                   {line && (
                     <div className="speech" key={line} role="status">
@@ -690,16 +689,14 @@ export default function App() {
                     onTalk={() => setPanel("talk")}
                     onStats={() => setPanel("stats")}
                     onStyle={() => setPanel("style")}
+                    onHelp={() => setPanel("help")}
                   />
-                  <p className="device-hint">
-                    Tap the pet to pat it. Shell buttons: <b>A</b> next icon, <b>B</b> select, <b>C</b> back. Keyboard works too.
-                  </p>
                 </div>
 
-                <div className="stage-side">
-                  {pet.hatched ? (
-                    <StatusMeters state={pet} brainNote={brainNote} onReset={doReset} age={ageText(pet.bornAt, now.getTime())} demo={demo} now={now} />
-                  ) : (
+                {pet.hatched ? (
+                  <PetSummary state={pet} status={line || brainNote} />
+                ) : (
+                  <div className="hatch-stage">
                     <HatchCard
                       name={hatchName}
                       setName={setHatchName}
@@ -709,14 +706,8 @@ export default function App() {
                       hatching={hatching}
                       inputRef={nameRef}
                     />
-                  )}
-                </div>
-              </div>
-            </section>
-
-            <section className="section">
-              <div className="wrap">
-                <RLExplainer />
+                  </div>
+                )}
               </div>
             </section>
 
@@ -768,6 +759,7 @@ export default function App() {
 
             {panel === "stats" && (
               <Popup title="STATS AND BRAIN" onClose={closePanel}>
+                <PetDetails state={pet} brainNote={brainNote} onReset={doReset} age={ageText(pet.bornAt, now.getTime())} demo={demo} now={now} />
                 <BrainCard
                   rl={rl}
                   needs={pet}
@@ -780,6 +772,15 @@ export default function App() {
                 />
                 <HabitCard habits={habits} now={now} petName={pet.petName} />
                 <EvolutionCard pet={pet} onBoost={onBoost} demo={demo} now={now} />
+              </Popup>
+            )}
+
+            {panel === "help" && (
+              <Popup title="HOW TO PLAY" onClose={closePanel} size="small">
+                <div className="card help-card">
+                  <p><b>Tap {pet.petName || SPECIES[pet.species].name}</b> for a pat, then use Feed, Play, Rest and Talk to care for them.</p>
+                  <p className="muted">The shell controls work too: <b>A</b> picks an icon, <b>B</b> selects it and <b>C</b> goes back. Keyboard A, B and C work when you are not typing.</p>
+                </div>
               </Popup>
             )}
 

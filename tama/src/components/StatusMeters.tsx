@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ALL_SPECIES, SPECIES, type SpeciesId } from "../art/pets";
 import { FORM_INFO, evolutionProgress, msUntilCanEvolve, formatTimeUntil } from "../game/evolutionLogic";
-import type { PetState } from "../game/petState";
+import { resolvePetName, type PetState } from "../game/petState";
 import { PetSprite } from "./PetSprite";
 import { PixelArt } from "./PixelArt";
 import { BOLT, HEART_CLIP, RICE_BALL, emptyOf, type Sprite } from "../art/sprites";
@@ -34,7 +34,29 @@ function Bar({ value, color, label }: { value: number; color: string; label: str
   );
 }
 
-export function StatusMeters({
+export function PetSummary({ state, status }: { state: PetState; status: string }) {
+  const petName = resolvePetName(state.petName, state.species);
+  return (
+    <section className="pet-summary" aria-label="Pet overview">
+      <div className="pet-summary-head">
+        <div>
+          <p className="eyebrow pixel">YOUR PET</p>
+          <h1 className="pet-name">{petName}</h1>
+        </div>
+        <span className="pill pixel">{FORM_INFO[state.evolution].name.toUpperCase()}</span>
+      </div>
+      <p className="pet-summary-stage">{SPECIES[state.species].name} · {state.asleep ? "resting" : "ready for today"}</p>
+      <div className="needs pet-summary-needs">
+        <IconMeter label="FULLNESS" value={100 - state.hunger} sprite={RICE_BALL} />
+        <IconMeter label="ENERGY" value={state.energy} sprite={BOLT} />
+        <IconMeter label="HAPPINESS" value={state.happiness} sprite={HEART_CLIP} />
+      </div>
+      <p className="pet-summary-status" role="status">{status}</p>
+    </section>
+  );
+}
+
+export function PetDetails({
   state,
   brainNote,
   onReset,

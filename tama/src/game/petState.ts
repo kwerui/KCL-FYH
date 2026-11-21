@@ -1,6 +1,6 @@
 import type { PetMode } from "../ai/types";
 import type { SpeciesId } from "../art/pets";
-import { SPECIES_IDS } from "../art/pets";
+import { SPECIES, SPECIES_IDS } from "../art/pets";
 import { computeEvolution, type Evolution } from "./evolutionLogic";
 
 export type { Evolution } from "./evolutionLogic";
@@ -52,6 +52,11 @@ export const INITIAL_STATE: PetState = {
 const STORAGE_KEY = "tama_pet";
 export const MAX_FACTS = 5;
 
+/** Show the saved nickname when present; old unnamed saves fall back to their species. */
+export function resolvePetName(name: unknown, species: SpeciesId): string {
+  return typeof name === "string" && name.trim() ? name.trim() : SPECIES[species].name;
+}
+
 export const clamp = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
 
 export function loadPetState(): PetState {
@@ -60,6 +65,7 @@ export function loadPetState(): PetState {
     if (raw) {
       const merged: PetState = { ...INITIAL_STATE, ...JSON.parse(raw) };
       if (!SPECIES_IDS.includes(merged.species)) merged.species = INITIAL_STATE.species;
+      merged.petName = resolvePetName(merged.petName, merged.species);
       merged.asleep = false;
       // Normalise new fields that may be absent in old saves
       merged.formChangedAt = merged.formChangedAt ?? 0;
@@ -114,7 +120,7 @@ export function hatchPet(state: PetState, name: string, species: SpeciesId): Pet
   const demoMode = localStorage.getItem("tama_demo") === "1";
   const next: PetState = {
     ...state,
-    petName: name.trim().slice(0, 12),
+    petName: resolvePetName(name.trim().slice(0, 12), species),
     species,
     hatched: true,
     bornAt: Date.now(),
