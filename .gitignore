@@ -1,0 +1,4 @@
+# Local editor / tool folders
+.claude/
+.idea/
+.DS_Store
