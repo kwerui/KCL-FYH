@@ -1,80 +1,64 @@
 # TAMA: Made by You
 
-A 1990s virtual pet rebuilt for 2026. Hatch a pixel pet, look after it, talk to it, and watch it learn your habits and grow into a Scholar, a Chaos Sprite or a Buddy.
+A 1990s Tamagotchi reimagined with conversational AI and reinforcement learning. Built for KCL FirstYearHack 2026, Retro Remix.
 
-KCL FirstYearHack 2026, Retro Remix track.
+Hatch one of nine pixel pets, care for it, customise the shell, chat in four modes, and use supported browser voice input and speech output. Core pet interactions and chat remain available through local fallback responses when no Gemini API key is configured.
 
-## Run it
+## Run locally
 
 ```bash
 npm install
+cp .env.example .env
+# Optional: add GEMINI_API_KEY to .env
 npm run dev
 ```
 
-Open http://localhost:5173.
+Open <http://localhost:5173>. `npm run dev` starts Vite and the local Express chat server. The API key is read by the server, not the browser.
 
-`npm run dev` starts the site and the optional chat server together. Without an API key the pet still works: chat falls back to local replies.
-
-To use Gemini, copy `.env.example` to `.env` and add `GEMINI_API_KEY`. The optional `GEMINI_MODEL` defaults to `gemini-3.1-flash-lite`, the verified low-latency chat model. The key is read only by the Express server and is never sent to the browser. Never commit `.env`.
-
-Other commands:
+## Commands
 
 ```bash
-npm run dev:frontend   # site only
-npm run build          # type check + production build
-npm run preview        # serve the production build
+npm test
+npm run build
 npm run lint
+npm run dev:frontend
+npm run dev:server
 ```
 
-## Pages
+## Navigation and features
 
-The site has two pages (hash routes, no extra router):
+The application uses hash routes with no router dependency:
 
-- **Home (`#/`):** the project intro. Hero with the pets bouncing around a showcase shell, the nine pets, and how it learns.
-- **My Pet (`#/play`):** the actual game.
-  - The interactive Tamagotchi. Tap the pet to pat it. Shell buttons work like the original: **A** moves between icons, **B** selects, **C** goes back (or pats). Keys A, B and C do the same.
-  - Bezel icons: Feed, Play, Lights (sleep), Study, Talk, Stats, Mode and Attention. Attention flashes when the pet has a suggestion for you.
-  - Hatch card (name + pick your pet), then the status card: needs, traits and what the brain has learned.
-  - Chat with four modes, each with its own activity (Silly: jokes and a guessing game. Serious: task breaker. Study: focus timer and quiz. Companion: remembers only what you choose).
-  - Brain card: live Q-values, explore rate, rewards and a demo speed toggle.
-  - Evolution card with +15 demo buttons for judging.
-  - Shell picker: 23 colours and patterns from the Figma file.
+- **Home (`#/`)** introduces TAMA and links into the game.
+- **About (`#/about`)** shows the pet gallery, shell gallery, and an interactive learning explainer.
+- **My Pet (`#/play`)** is the game: hatch and care for a pet, switch its conversation mode, use its device controls, and view its learning state.
 
-## Local memory
+Conversation modes are **Silly** (jokes and a guessing game), **Serious** (task breakdown), **Study** (focus timer and quiz), and **Companion** (opt-in saved facts). The device supports feed, play, rest, study, chat, stats, shell, and attention controls. Voice input and output use the browser's Web Speech API when supported; typing remains available when voice input is unavailable.
 
-The pet runs entirely in the browser. Everything is saved in localStorage: `tama_pet` (name, species, needs, traits, form, remembered facts), `tama_rl` (the Q-table, visit counts, explore rate, rewards) and `tama_skin`. No account and no database. Only the optional Gemini chat talks to the server, and it falls back to local replies when Gemini is unavailable, times out, rejects a key, rate-limits, or cannot serve the configured model. The chat card safely shows whether the latest model reply came from Gemini or the local fallback. "Reset (new egg)" clears the pet and its brain.
+## Contextual-bandit Q-learning
 
-## How the RL works
+`src/game/rl.ts` runs a one-step contextual bandit (Q-learning with gamma 0) to choose a suggestion, not to run the pet simulation. It observes 32 contexts: four times of day × hungry/not hungry × tired/not tired × sad/not sad. In each context it scores four actions: feed, play, rest, and chat.
 
-`src/game/rl.ts`
+- Follow a pending suggestion: **+1**
+- Do another activity while a suggestion is pending: **−0.25**
+- Let a suggestion expire: **−0.5**
 
-- The pet regularly suggests one thing: feed, play, rest or chat.
-- It's a **contextual bandit** (one-step Q-learning, gamma = 0). The context is time of day (4) x hungry x tired x sad, so 32 situations.
-- **Rewards:** you do what it suggested within the window: **+1**. You do something else: **-0.25**. You ignore it until the window closes: **-0.5**.
-- **Update:** `Q(s,a) += alpha * (r - Q(s,a))` with alpha 0.25.
-- **Policy:** epsilon-greedy. Epsilon starts at 35% and decays to 5% as it learns.
-- **Learning by watching:** if you care for it while no suggestion is pending, that action gets a small habit reward (+0.4 at a lower learning rate) in the current situation.
-- Normal timing: a suggestion every 45s with a 30s window. Demo speed: every 12s with a 15s window. "Make a suggestion now" triggers one instantly.
-- The RL only chooses suggestions. Care stats and evolution are owned by the game logic, not the model.
+Each outcome updates the suggested action's value with `Q(s,a) ← Q(s,a) + α(reward − Q(s,a))`, where `α = 0.25`. Epsilon-greedy selection starts with 35% exploration and decays to a 5% minimum. Care performed with no pending suggestion receives a smaller habit observation. The game logic, rather than the learner, owns needs and evolution.
 
 ## Evolution
 
-`src/game/evolutionLogic.ts`
-
-- Feeding, pats and Companion chats raise Friendship. Play and Silly raise Playfulness. Study sessions, quizzes and Study chats raise Curiosity.
-- When the top trait reaches 30 the hatchling evolves: Curiosity becomes a Scholar, Playfulness a Chaos Sprite, Friendship a Buddy.
-- After that it only changes form if another trait overtakes by 10, so it doesn't flicker.
+The leading personality trait determines the evolved form: Curiosity → Scholar, Playfulness → Chaos Sprite, and Friendship → Buddy. A hatchling can evolve once it is at least 24 hours old (one minute in demo mode) and its leading trait reaches **25**. After evolving, a form can switch only after 24 hours (30 seconds in demo mode), when a different leading trait is at least 10 points ahead.
 
 ## Project layout
 
-```
+```text
 src/
-  art/            pixel grids (pets, accessories, logo) and shell skins
-  components/     TamagotchiShell, LcdScene, PetSprite, ChatPanel, BrainCard, ...
-  game/           petState, careLogic, evolutionLogic, rl, activities, dialogueFallback
-  ai/             shared PetRequest / PetResponse contract and the client
-  hooks/          useSpeech (voice in/out)
-  styles/         retro.css
-server/           optional LLM proxy (keeps the API key server-side)
+  ai/             Gemini client, prompts, and response types
+  art/            pixel pets, scenes, and shell skins
+  components/     pages, Tamagotchi controls, activities, and panels
+  game/           care, evolution, activities, habits, and Q-learning
+server/           Express Gemini proxy and fallback handling
+../src/voice/     shared browser voice hook and voice preferences
 ```
 
+`../src/voice/` is shared with the repository's separate root voice-testing playground. It is not a `tama/src/hooks` module; TAMA imports it directly from the root voice module.
