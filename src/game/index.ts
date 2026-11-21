@@ -21,3 +21,21 @@ export type {
   PetState,
   PetStateOverrides,
 } from "./petState";
+export {
+  DEFAULT_STUDY_DURATION_MS,
+  DEMO_STUDY_DURATION_MS,
+  advanceStudyTimer,
+  completeStudySession,
+  createStudyTimer,
+  getStudyTimerMessage,
+  pauseStudyTimer,
+  resetStudyTimer,
+  resumeStudyTimer,
+  startStudyTimer,
+} from "./studyTimer";
+export type {
+  StudyCompletionResult,
+  StudyTimer,
+  StudyTimerOptions,
+  StudyTimerStatus,
+} from "./studyTimer";
