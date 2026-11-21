@@ -15,7 +15,7 @@ Open http://localhost:5173.
 
 `npm run dev` starts the site and the optional chat server together. Without an API key the pet still works: chat falls back to local replies.
 
-To use the LLM, copy `.env.example` to `.env` and add your key. Never commit `.env`.
+To use Gemini, copy `.env.example` to `.env` and add `GEMINI_API_KEY`. The optional `GEMINI_MODEL` defaults to `gemini-3.1-flash-lite`, the verified low-latency chat model. The key is read only by the Express server and is never sent to the browser. Never commit `.env`.
 
 Other commands:
 
@@ -42,7 +42,7 @@ The site has two pages (hash routes, no extra router):
 
 ## Local memory
 
-The pet runs entirely in the browser. Everything is saved in localStorage: `tama_pet` (name, species, needs, traits, form, remembered facts), `tama_rl` (the Q-table, visit counts, explore rate, rewards) and `tama_skin`. No account and no database. Only the optional LLM chat talks to the server, and it falls back to local replies when that's off. "Reset (new egg)" clears the pet and its brain.
+The pet runs entirely in the browser. Everything is saved in localStorage: `tama_pet` (name, species, needs, traits, form, remembered facts), `tama_rl` (the Q-table, visit counts, explore rate, rewards) and `tama_skin`. No account and no database. Only the optional Gemini chat talks to the server, and it falls back to local replies when Gemini is unavailable, times out, rejects a key, rate-limits, or cannot serve the configured model. The chat card safely shows whether the latest model reply came from Gemini or the local fallback. "Reset (new egg)" clears the pet and its brain.
 
 ## How the RL works
 

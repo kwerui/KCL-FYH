@@ -68,6 +68,7 @@ export default function App() {
   const [hatchSpecies, setHatchSpecies] = useState<SpeciesId | "surprise">("surprise");
   const [hatching, setHatching] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [chatSource, setChatSource] = useState<"gemini" | "fallback" | null>(null);
   const [page, setPage] = useState<Page>(() => (window.location.hash.startsWith("#/play") ? "play" : "home"));
   const scrollTarget = useRef<string | null>(null);
 
@@ -366,8 +367,9 @@ export default function App() {
           energy: p.energy,
           happiness: p.happiness,
         });
-        petSays(res.reply, { chat: true, voice: true });
-        feel(res.emotion, 3200);
+        setChatSource(res.source);
+        petSays(res.response.reply, { chat: true, voice: true });
+        feel(res.response.emotion, 3200);
         setPet((s) => applyConversationBonus(s, s.mode));
       } catch {
         petSays("...bzzt... my antenna is fuzzy. Try again?", { chat: true });
@@ -463,6 +465,7 @@ export default function App() {
     setView("pet");
     setLastOutcome(keepBrain ? "Kept what it learned about your habits." : "Waiting for its first suggestion.");
     setHatchSpecies("surprise");
+    setChatSource(null);
     setEmotion("happy");
     cancelListening();
     cancelSpeech();
@@ -657,6 +660,7 @@ export default function App() {
                     onCutePreset={useCutePixrlVoice}
                     onPreviewVoice={previewVoice}
                     inputRef={chatInputRef}
+                    responseSource={chatSource}
                   />
                   <ActivityPanel
                     pet={pet}
