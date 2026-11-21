@@ -2153,6 +2153,7 @@ button:disabled {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .icon-btn {
@@ -2173,6 +2174,52 @@ button:disabled {
   border-color: #e8545b;
   color: #fff;
   animation: blink 0.8s steps(2) infinite;
+}
+
+.voice-settings {
+  flex-basis: 100%;
+  color: var(--ink);
+}
+
+.voice-settings summary {
+  cursor: pointer;
+  color: var(--lilac-dark);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.voice-settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: end;
+  margin-top: 8px;
+  padding: 8px;
+  border: 2px solid var(--lilac-soft);
+  border-radius: 12px;
+  background: var(--cream);
+  font-size: 12px;
+}
+
+.voice-settings-grid label {
+  display: grid;
+  gap: 3px;
+  font-weight: 700;
+}
+
+.voice-settings-grid select,
+.voice-settings-grid input[type="range"] {
+  width: 100%;
+}
+
+.voice-settings-grid label:nth-of-type(n + 2) {
+  grid-column: span 1;
+}
+
+.voice-settings-grid .muted {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 /* Activity */

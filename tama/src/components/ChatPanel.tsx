@@ -2,10 +2,10 @@ import { useEffect, useRef } from "react";
 import type { PetMode } from "../ai/types";
 import type { PetState } from "../game/petState";
 import { MAX_FACTS } from "../game/petState";
-import type { SpeechState } from "../hooks/useSpeech";
 import { ModeSelector } from "./ModeSelector";
 import { PetSprite } from "./PetSprite";
 import { VoiceControls } from "./VoiceControls";
+import type { VoicePreferences } from "../../../src/voice/voicePreferences";
 
 export type ChatMsg = { id: number; role: "user" | "pet"; text: string };
 
@@ -18,11 +18,21 @@ type Props = {
   onSend: (text: string) => void;
   onMode: (m: PetMode) => void;
   onRemember: (text: string) => void;
-  speechState: SpeechState;
+  isListening: boolean;
+  isRecognitionSupported: boolean;
+  isSynthesisSupported: boolean;
   transcript: string;
+  voiceError: string | null;
   onMic: () => void;
   muted: boolean;
   setMuted: (m: boolean) => void;
+  voices: SpeechSynthesisVoice[];
+  voicePreferences: VoicePreferences;
+  setVoiceURI: (voiceURI: string) => void;
+  setVoicePitch: (pitch: number) => void;
+  setVoiceRate: (rate: number) => void;
+  onCutePreset: () => void;
+  onPreviewVoice: () => boolean;
   inputRef: React.RefObject<HTMLInputElement | null>;
 };
 
@@ -33,7 +43,7 @@ export function ChatPanel(p: Props) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [p.messages, p.loading]);
 
-  const listening = p.speechState === "listening";
+  const listening = p.isListening;
   const full = p.pet.savedFacts.length >= MAX_FACTS;
 
   return (
@@ -95,16 +105,26 @@ export function ChatPanel(p: Props) {
           aria-label="Message"
         />
         <VoiceControls
-          speechState={p.speechState}
+          isListening={p.isListening}
+          isRecognitionSupported={p.isRecognitionSupported}
+          isSynthesisSupported={p.isSynthesisSupported}
           onMic={p.onMic}
           muted={p.muted}
           setMuted={p.setMuted}
-          disabled={!p.pet.hatched}
+          voices={p.voices}
+          voicePreferences={p.voicePreferences}
+          setVoiceURI={p.setVoiceURI}
+          setVoicePitch={p.setVoicePitch}
+          setVoiceRate={p.setVoiceRate}
+          onCutePreset={p.onCutePreset}
+          onPreviewVoice={p.onPreviewVoice}
+          disabled={p.loading || !p.pet.hatched}
         />
         <button type="submit" className="btn btn-primary" disabled={p.loading || !p.input.trim() || !p.pet.hatched}>
           Send
         </button>
       </form>
+      {p.voiceError && <p className="muted" role="alert">{p.voiceError}</p>}
     </section>
   );
 }
