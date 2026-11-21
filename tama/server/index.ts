@@ -1,90 +1,131 @@
 /**
- * Secure backend proxy — API key lives here only, never in browser code.
- * POST /api/chat  → calls Claude → returns PetResponse JSON
+ * Secure Gemini proxy — API key lives here only, never in browser code.
+ * POST /api/chat → returns PetResponse JSON plus a safe source marker.
  */
 
 import "dotenv/config";
-import express from "express";
 import cors from "cors";
-import Anthropic from "@anthropic-ai/sdk";
+import express from "express";
+import { GoogleGenAI } from "@google/genai";
+import { randomUUID } from "node:crypto";
 import { buildSystemPrompt } from "../src/ai/prompts.js";
-import type { PetRequest, PetResponse } from "../src/ai/types.js";
+import type { PetRequest } from "../src/ai/types.js";
+import {
+  GEMINI_MAX_OUTPUT_TOKENS,
+  GEMINI_THINKING_LEVEL,
+  GEMINI_TIMEOUT_MS,
+  validatePetRequest,
+} from "./chat.js";
+import { fallbackPetResponse, parseGeminiPetResponse, petResponseJsonSchema } from "./gemini.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.1-flash-lite";
 
 const allowedOrigins = [
   "http://localhost:5173",
   process.env.FRONTEND_URL,
 ].filter(Boolean) as string[];
 
-app.use(cors({ origin: allowedOrigins }));
+app.use(cors({ origin: allowedOrigins, exposedHeaders: ["X-TAMA-Source", "X-Request-Id"] }));
 app.use(express.json({ limit: "16kb" }));
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+function errorStatus(error: unknown): number | null {
+  if (typeof error !== "object" || error === null || !("status" in error)) return null;
+  return typeof error.status === "number" ? error.status : null;
+}
 
-app.post("/api/chat", async (req, res) => {
-  const body = req.body as PetRequest;
+function diagnostic(event: string, fields: Record<string, string | number | null>) {
+  // Deliberately allowlist operational fields: no request text, provider payload, or API key.
+  console.warn(JSON.stringify({ event, provider: "gemini", ...fields }));
+}
 
-  if (!body?.message || typeof body.message !== "string") {
-    res.status(400).json({ error: "Missing message" });
-    return;
+function providerErrorReason(error: unknown, status: number | null): "timeout" | "api_error" {
+  const name = error instanceof Error ? error.name : "";
+  return name === "TimeoutError" || name === "AbortError" || status === 408 || status === 504 ? "timeout" : "api_error";
+}
+
+async function requestGemini(body: PetRequest, requestId: string) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    diagnostic("gemini_fallback", { requestId, reason: "missing_api_key", model: GEMINI_MODEL, durationMs: 0, providerStatus: null });
+    return null;
   }
-  if (body.message.length > 500) {
-    res.status(400).json({ error: "Message too long" });
-    return;
-  }
 
-  const systemPrompt = buildSystemPrompt(
+  const systemInstruction = buildSystemPrompt(
     body.mode ?? "companion",
     body.petName ?? "Tama",
     body.personality ?? { curiosity: 50, playfulness: 50, friendship: 50 },
     body.hunger ?? 50,
     body.energy ?? 80,
     body.happiness ?? 70,
-    body.memories ?? []
+    body.memories ?? [],
   );
 
+  const startedAt = performance.now();
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 200,
-      system: systemPrompt,
-      messages: [{ role: "user", content: body.message }],
+    const gemini = new GoogleGenAI({ apiKey });
+    const response = await gemini.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: body.message,
+      config: {
+        systemInstruction,
+        // Minimal thinking is sufficient for a short, conversational pet turn.
+        thinkingConfig: { thinkingLevel: GEMINI_THINKING_LEVEL },
+        maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
+        responseMimeType: "application/json",
+        responseJsonSchema: petResponseJsonSchema,
+        abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+      },
     });
-
-    const rawText = message.content[0].type === "text" ? message.content[0].text : "";
-
-    let parsed: Partial<PetResponse>;
-    try {
-      const clean = rawText.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
-      parsed = JSON.parse(clean);
-    } catch {
-      parsed = { reply: rawText.slice(0, 300) || "...", emotion: "happy", suggestedAction: null };
+    const parsed = response.text ? parseGeminiPetResponse(response.text) : null;
+    if (!parsed) {
+      diagnostic("gemini_fallback", {
+        requestId,
+        reason: response.text ? "schema_failure" : "empty_response",
+        model: GEMINI_MODEL,
+        durationMs: Math.round(performance.now() - startedAt),
+        providerStatus: null,
+      });
     }
-
-    const validEmotions = ["happy", "sad", "excited", "thinking", "sleepy", "hungry"];
-    const validActions = ["feed", "play", "rest", null];
-    const response: PetResponse = {
-      reply: typeof parsed.reply === "string" ? parsed.reply.slice(0, 400) : "...",
-      emotion: validEmotions.includes(parsed.emotion as string)
-        ? (parsed.emotion as PetResponse["emotion"])
-        : "happy",
-      suggestedAction: validActions.includes(parsed.suggestedAction as string | null)
-        ? parsed.suggestedAction
-        : null,
-    };
-
-    res.json(response);
-  } catch (err) {
-    console.error("[server] Anthropic error:", err);
-    res.status(502).json({ error: "LLM unavailable" });
+    return parsed;
+  } catch (error) {
+    const status = errorStatus(error);
+    diagnostic("gemini_fallback", {
+      requestId,
+      reason: providerErrorReason(error, status),
+      model: GEMINI_MODEL,
+      durationMs: Math.round(performance.now() - startedAt),
+      providerStatus: status,
+    });
+    return null;
   }
+}
+
+app.post("/api/chat", async (req, res) => {
+  const validated = validatePetRequest(req.body);
+  if (!validated.ok) {
+    res.status(400).json({ error: validated.error });
+    return;
+  }
+
+  const requestId = randomUUID();
+  res.set("X-Request-Id", requestId);
+  const geminiResponse = await requestGemini(validated.value, requestId);
+  res.set("X-TAMA-Source", geminiResponse ? "gemini" : "fallback").json(geminiResponse ?? fallbackPetResponse(validated.value));
+});
+
+app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (error instanceof SyntaxError && "body" in error) {
+    res.status(400).json({ error: "Invalid JSON request body" });
+    return;
+  }
+  next(error);
 });
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
   console.log(`[TAMA server] http://localhost:${PORT}`);
-  console.log(`[TAMA server] API key ${process.env.ANTHROPIC_API_KEY ? "LOADED ✓" : "MISSING — will use fallback"}`);
+  console.log(`[TAMA server] Gemini API key ${process.env.GEMINI_API_KEY ? "LOADED ✓" : "MISSING — will use fallback"}`);
 });
