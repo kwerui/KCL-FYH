@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  CUTE_PIXRL_PREFERENCES,
+  chooseDefaultVoiceId,
+  loadVoicePreferences,
+  normaliseVoicePreferences,
+  saveVoicePreferences,
+  type VoicePreferences,
+} from "./voicePreferences";
 
 type RecognitionResultLike = {
   0: { transcript: string };
@@ -51,6 +59,8 @@ export type SpeechControls = {
   isListening: boolean;
   isSpeaking: boolean;
   isMuted: boolean;
+  voices: SpeechSynthesisVoice[];
+  voicePreferences: VoicePreferences;
   recognisedText: string;
   error: SpeechError | null;
   startListening: () => Promise<void>;
@@ -59,9 +69,23 @@ export type SpeechControls = {
   speak: (text: string) => boolean;
   cancelSpeech: () => void;
   setMuted: (muted: boolean) => void;
+  setVoiceURI: (voiceURI: string) => void;
+  setVoicePitch: (pitch: number) => void;
+  setVoiceRate: (rate: number) => void;
+  useCutePixrlVoice: () => void;
+  previewVoice: () => boolean;
   setRecognisedText: (text: string) => void;
   clearError: () => void;
 };
+
+function getBrowserStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
 
 function getRecognitionConstructor(): SpeechRecognitionConstructor | undefined {
   if (typeof window === "undefined") return undefined;
@@ -102,6 +126,10 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
   const [isMuted, setIsMutedState] = useState(false);
   const [recognisedText, setRecognisedText] = useState("");
   const [error, setError] = useState<SpeechError | null>(null);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voicePreferences, setVoicePreferences] = useState<VoicePreferences>(() =>
+    loadVoicePreferences(getBrowserStorage()),
+  );
 
   useEffect(() => {
     onFinalTranscriptRef.current = onFinalTranscript;
@@ -110,6 +138,25 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
   const isRecognitionSupported = Boolean(getRecognitionConstructor());
   const isSynthesisSupported =
     typeof window !== "undefined" && "speechSynthesis" in window;
+
+  useEffect(() => {
+    if (!isSynthesisSupported) return;
+
+    const updateVoices = () => setVoices(window.speechSynthesis.getVoices());
+    updateVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", updateVoices);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", updateVoices);
+  }, [isSynthesisSupported]);
+
+  useEffect(() => {
+    if (voicePreferences.voiceURI && voices.some((voice) => voice.voiceURI === voicePreferences.voiceURI)) return;
+    const voiceURI = chooseDefaultVoiceId(voices);
+    if (voiceURI) setVoicePreferences((preferences) => ({ ...preferences, voiceURI }));
+  }, [voices, voicePreferences.voiceURI]);
+
+  useEffect(() => {
+    saveVoicePreferences(voicePreferences, getBrowserStorage());
+  }, [voicePreferences]);
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -130,6 +177,15 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
     [cancelSpeech],
   );
 
+  const updateVoicePreferences = useCallback((changes: Partial<VoicePreferences>) => {
+    setVoicePreferences((preferences) => normaliseVoicePreferences({ ...preferences, ...changes }));
+  }, []);
+
+  const setVoiceURI = useCallback((voiceURI: string) => updateVoicePreferences({ voiceURI }), [updateVoicePreferences]);
+  const setVoicePitch = useCallback((pitch: number) => updateVoicePreferences({ pitch }), [updateVoicePreferences]);
+  const setVoiceRate = useCallback((rate: number) => updateVoicePreferences({ rate }), [updateVoicePreferences]);
+  const useCutePixrlVoice = useCallback(() => updateVoicePreferences(CUTE_PIXRL_PREFERENCES), [updateVoicePreferences]);
+
   const speak = useCallback(
     (text: string): boolean => {
       const message = text.trim();
@@ -148,6 +204,9 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
 
       const utterance = new SpeechSynthesisUtterance(message);
       utterance.lang = language;
+      utterance.voice = voices.find((voice) => voice.voiceURI === voicePreferences.voiceURI) ?? null;
+      utterance.pitch = voicePreferences.pitch;
+      utterance.rate = voicePreferences.rate;
       utterance.onstart = () => setIsSpeaking(true);
       utterance.onend = () => {
         if (utteranceRef.current === utterance) {
@@ -167,7 +226,12 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
       window.speechSynthesis.speak(utterance);
       return true;
     },
-    [cancelSpeech, language],
+    [cancelSpeech, language, voicePreferences, voices],
+  );
+
+  const previewVoice = useCallback(
+    () => speak("Hi hi! I'm Pixrl. Let's have a lovely adventure!"),
+    [speak],
   );
 
   const getRecognition = useCallback((): SpeechRecognitionLike | null => {
@@ -282,6 +346,8 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
     isListening,
     isSpeaking,
     isMuted,
+    voices,
+    voicePreferences,
     recognisedText,
     error,
     startListening,
@@ -290,6 +356,11 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
     speak,
     cancelSpeech,
     setMuted,
+    setVoiceURI,
+    setVoicePitch,
+    setVoiceRate,
+    useCutePixrlVoice,
+    previewVoice,
     setRecognisedText,
     clearError,
   };

@@ -92,6 +92,7 @@ export default function App() {
   const {
     isListening,
     isRecognitionSupported,
+    isSynthesisSupported,
     recognisedText,
     error: speechError,
     startListening,
@@ -101,6 +102,13 @@ export default function App() {
     cancelSpeech,
     isMuted,
     setMuted,
+    voices,
+    voicePreferences,
+    setVoiceURI,
+    setVoicePitch,
+    setVoiceRate,
+    useCutePixrlVoice,
+    previewVoice,
     clearError,
   } = useSpeech({ language: "en-GB", onFinalTranscript });
   const skin = skinById(skinId);
@@ -635,11 +643,19 @@ export default function App() {
                     onRemember={remember}
                     isListening={isListening}
                     isRecognitionSupported={isRecognitionSupported}
+                    isSynthesisSupported={isSynthesisSupported}
                     transcript={recognisedText}
                     voiceError={speechError?.message ?? null}
                     onMic={onMic}
                     muted={isMuted}
                     setMuted={setMuted}
+                    voices={voices}
+                    voicePreferences={voicePreferences}
+                    setVoiceURI={setVoiceURI}
+                    setVoicePitch={setVoicePitch}
+                    setVoiceRate={setVoiceRate}
+                    onCutePreset={useCutePixrlVoice}
+                    onPreviewVoice={previewVoice}
                     inputRef={chatInputRef}
                   />
                   <ActivityPanel
