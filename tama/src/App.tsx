@@ -22,7 +22,7 @@ import {
   RL_ACTIONS, bestGuess, clearRLState, describeContext, expire, loadRLState, nudgeLine, observe, pendingAction,
   saveRLState, suggest, type RLAction, type RLState,
 } from "./game/rl";
-import { useSpeech } from "./hooks/useSpeech";
+import { useSpeech } from "../../src/voice/useSpeech";
 
 import { ActivityPanel } from "./components/ActivityPanel";
 import { BrainCard } from "./components/BrainCard";
@@ -83,8 +83,25 @@ export default function App() {
   const lastPat = useRef(0);
   const emotionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevEvolution = useRef(pet.evolution);
+  const sendMessageRef = useRef<(text: string) => void>(() => undefined);
 
-  const { speechState, transcript, startListening, stopListening, speak, muted, setMuted } = useSpeech();
+  const onFinalTranscript = useCallback((text: string) => {
+    sendMessageRef.current(text);
+  }, []);
+  const {
+    isListening,
+    isRecognitionSupported,
+    recognisedText,
+    error: speechError,
+    startListening,
+    stopListening,
+    cancelListening,
+    speak,
+    cancelSpeech,
+    isMuted,
+    setMuted,
+    clearError,
+  } = useSpeech({ language: "en-GB", onFinalTranscript });
   const skin = skinById(skinId);
 
   useEffect(() => savePetState(pet), [pet]);
@@ -353,10 +370,17 @@ export default function App() {
     [loading, game, quiz, teach, petSays, playFx, feel],
   );
 
+  useEffect(() => {
+    sendMessageRef.current = (text) => void sendMessage(text);
+  }, [sendMessage]);
+
   const onMic = useCallback(() => {
-    if (speechState === "listening") stopListening();
-    else startListening((t) => sendMessage(t));
-  }, [speechState, startListening, stopListening, sendMessage]);
+    if (isListening) stopListening();
+    else {
+      clearError();
+      void startListening();
+    }
+  }, [isListening, startListening, stopListening, clearError]);
 
   const remember = useCallback(
     (fact: string) => {
@@ -431,10 +455,12 @@ export default function App() {
     setLastOutcome(keepBrain ? "Kept what it learned about your habits." : "Waiting for its first suggestion.");
     setHatchSpecies("surprise");
     setEmotion("happy");
-    window.speechSynthesis?.cancel();
+    cancelListening();
+    cancelSpeech();
+    clearError();
     window.scrollTo({ top: 0, behavior: "smooth" });
     setTimeout(() => nameRef.current?.focus(), 350);
-  }, []);
+  }, [cancelListening, cancelSpeech, clearError]);
 
   // ---- Hardware buttons ----
   const runIcon = useCallback(
@@ -606,10 +632,12 @@ export default function App() {
                     onSend={sendMessage}
                     onMode={setMode}
                     onRemember={remember}
-                    speechState={speechState}
-                    transcript={transcript}
+                    isListening={isListening}
+                    isRecognitionSupported={isRecognitionSupported}
+                    transcript={recognisedText}
+                    voiceError={speechError?.message ?? null}
                     onMic={onMic}
-                    muted={muted}
+                    muted={isMuted}
                     setMuted={setMuted}
                     inputRef={chatInputRef}
                   />
