@@ -9,21 +9,46 @@ const ACTIONS: { id: CareAction; label: string; sprite: typeof BALL }[] = [
   { id: "pat", label: "Pat", sprite: HEART },
 ];
 
+const EXTRA = {
+  talk: "M4 5h16v11H9l-4 4v-4H4z",
+  stats: "M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z",
+  style: "M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8zM18 15l.8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8z",
+};
+
 export function CareControls({
   onCare,
   disabled,
   asleep,
+  onTalk,
+  onStats,
+  onStyle,
 }: {
   onCare: (a: CareAction) => void;
   disabled: boolean;
   asleep: boolean;
+  onTalk: () => void;
+  onStats: () => void;
+  onStyle: () => void;
 }) {
+  const extras: [string, string, () => void, boolean][] = [
+    ["Talk", EXTRA.talk, onTalk, disabled],
+    ["Stats", EXTRA.stats, onStats, disabled],
+    ["Customise", EXTRA.style, onStyle, false],
+  ];
   return (
     <div className="care-row" role="group" aria-label="Care for your pet">
       {ACTIONS.map((a) => (
         <button key={a.id} type="button" className={`care-btn care-${a.id}`} onClick={() => onCare(a.id)} disabled={disabled}>
           <PixelArt grid={a.sprite.grid} palette={a.sprite.palette} size={18} />
           <span>{a.id === "rest" && asleep ? "Wake" : a.label}</span>
+        </button>
+      ))}
+      {extras.map(([label, d, fn, off]) => (
+        <button key={label} type="button" className="care-btn extra" onClick={fn} disabled={off}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d={d} />
+          </svg>
+          <span>{label}</span>
         </button>
       ))}
     </div>

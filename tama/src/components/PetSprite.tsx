@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { SPECIES, bottomRow, topRow, type SpeciesId } from "../art/pets";
-import { EGG, EGG_CRACKED, EGGSHELL, HEART_CLIP, PARTY_HAT, SCHOLAR_CAP } from "../art/sprites";
+import { EGG, EGG_CRACKED, EGG_CRACKED_2, EGGSHELL, HEART_CLIP, PARTY_HAT, SCHOLAR_CAP } from "../art/sprites";
 import type { Evolution } from "../game/evolutionLogic";
 import { PixelLayer } from "./PixelArt";
 
@@ -8,7 +8,7 @@ type Props = {
   species: SpeciesId;
   evolution: Evolution;
   eyesClosed?: boolean;
-  cracked?: boolean;
+  crack?: number; // 0, 1 or 2 cracks on the egg
   size?: number; // css px width; omit when sized by CSS
   className?: string;
   blink?: boolean;
@@ -19,7 +19,7 @@ type Props = {
 export const SPRITE_W = 20;
 export const SPRITE_H = 26;
 
-export function PetSprite({ species, evolution, eyesClosed, cracked, size, className, blink = true, plain }: Props) {
+export function PetSprite({ species, evolution, eyesClosed, crack = 0, size, className, blink = true, plain }: Props) {
   const sp = SPECIES[species];
   const palette = useMemo(() => ({ K: "#3B2F4A", W: "#FFFFFF", P: "#F7A6B9", ...sp.palette }), [sp]);
   const [blinking, setBlinking] = useState(false);
@@ -50,7 +50,7 @@ export function PetSprite({ species, evolution, eyesClosed, cracked, size, class
   const oy = 8;
 
   if (evolution === "egg") {
-    const egg = cracked ? EGG_CRACKED : EGG;
+    const egg = crack >= 2 ? EGG_CRACKED_2 : crack === 1 ? EGG_CRACKED : EGG;
     return (
       <svg
         className={className}

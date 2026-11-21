@@ -43,6 +43,15 @@ export const EGG_CRACKED = sprite(
   { W: "#FFF8EC", L: "#B9A7F0" },
 );
 
+export const EGG_CRACKED_2 = sprite(
+  [
+    "....KKKK....", "...KWWKWK...", "..KWWKWWWK..", ".KWWLKWWKWK.", ".KWKLKWWKWK.",
+    "KWWKWWKWLKWK", "KWWWKWKKLLWK", "KWWKWWWWKWWK", "KWLKWWKWWKWK", "KWLLWKWKWWWK",
+    ".KWWWWKLLWK.", ".KWWWWWWWWK.", "..KKWWWWKK..", "....KKKK....",
+  ],
+  { W: "#FFF8EC", L: "#B9A7F0" },
+);
+
 export const RICE_BALL = sprite(
   ["...KK...", "..KWWK..", ".KWWWWK.", ".KWWWWK.", "KWWWWWWK", "KDDDDDDK", "KDDDDDDK", ".KKKKKK."],
   { D: "#2F4F3A" },
@@ -69,17 +78,19 @@ export const BOOK = sprite(
   { B: "#6F9BE0" },
 );
 
+export const BOLT = sprite(
+  ["..KKK", ".KYYK", "KYYK.", "KKYYK", ".KYK.", "KYK..", "KK..."],
+  { Y: "#FFD24D" },
+);
+
+/** Same sprite drawn as an empty slot (for meters). */
+export function emptyOf(s: Sprite): Sprite {
+  const palette: Record<string, string> = {};
+  for (const k of Object.keys(s.palette)) palette[k] = k === "K" ? "#C9C0E6" : "#EEE9FA";
+  return { grid: s.grid, palette };
+}
+
 export const Z = sprite(["KKKK", "..K.", ".K..", "KKKK"]);
 
-/** The Figma logo mark: a tiny pixel Tamagotchi. */
-export const LOGO_MARK = sprite(
-  [
-    "......KKKK......", "....KKLLLLKK....", "...KLLWLLLLLK...", "..KLWLLLLLLLLK..", "..KLLLLLLLLLLK..",
-    ".KLLKKKKKKKKLLK.", ".KLLKGGGGGGKLLK.", "KLLLKGKGGKGKLLLK", "KLLLKGGKKGGKLLLK", "KLLLKKKKKKKKLLLK",
-    "KLLLLLLLLLLLLLLK", "KLLLYLLYYLLYLLLK", ".KLLLLLLLLLLLLK.", "..KLLLLLLLLLLK..", "...KKLLLLLLKK...",
-    ".....KKKKKK.....",
-  ],
-  { L: "#B9A7F0", G: "#E4ECD3", Y: "#FFD24D" },
-);
 
 export { INK };

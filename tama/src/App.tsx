@@ -12,6 +12,7 @@ import { generatePetReply } from "./ai/client";
 import type { PetEmotion, PetMode } from "./ai/types";
 import { SPECIES, SPECIES_IDS, type SpeciesId } from "./art/pets";
 import { loadSkinId, saveSkinId, skinById } from "./art/skins";
+import { SCENES, SceneArt, loadSceneId, saveSceneId, type SceneId } from "./art/scenes";
 import {
   breakTask, checkAnswer, guess, newGuessGame, quizQuestion, tellJoke, type GuessGame,
 } from "./game/activities";
@@ -23,14 +24,21 @@ import {
   saveRLState, suggest, type RLAction, type RLState,
 } from "./game/rl";
 import { useSpeech } from "./hooks/useSpeech";
+import {
+  ageText, clearHabits, clockText, isNightTime, loadHabits, recordHabit, saveHabits, type Habits,
+} from "./game/clock";
 
 import { ActivityPanel } from "./components/ActivityPanel";
 import { BrainCard } from "./components/BrainCard";
 import { Footer, Header, type Page } from "./components/Brand";
 import { CareControls } from "./components/CareControls";
+import { Popup } from "./components/Popup";
+import { RLExplainer } from "./components/RLExplainer";
 import { ChatPanel, type ChatMsg } from "./components/ChatPanel";
 import { EvolutionCard } from "./components/EvolutionCard";
+import { HabitCard } from "./components/HabitCard";
 import { ShellGallery } from "./components/Galleries";
+import { StickerRail } from "./components/StickerRail";
 import { HomePage } from "./components/HomePage";
 import { LcdScene, type Fx, type FxKind } from "./components/LcdScene";
 import { MODES } from "./components/ModeSelector";
@@ -51,6 +59,7 @@ export default function App() {
   const [pet, setPet] = useState<PetState>(loadPetState);
   const [rl, setRl] = useState<RLState>(loadRLState);
   const [skinId, setSkinId] = useState(loadSkinId);
+  const [sceneId, setSceneId] = useState<SceneId>(loadSceneId);
   const [emotion, setEmotion] = useState<PetEmotion>("happy");
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
@@ -66,9 +75,15 @@ export default function App() {
   const [hatchName, setHatchName] = useState("");
   const [hatchSpecies, setHatchSpecies] = useState<SpeciesId | "surprise">("surprise");
   const [hatching, setHatching] = useState(false);
+  const [eggTaps, setEggTaps] = useState(0);
+  const [habits, setHabits] = useState<Habits>(loadHabits);
+  const [now, setNow] = useState(() => new Date());
+  const nightRef = useRef<boolean | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [page, setPage] = useState<Page>(() => (window.location.hash.startsWith("#/play") ? "play" : "home"));
   const scrollTarget = useRef<string | null>(null);
+  const [panel, setPanel] = useState<null | "talk" | "stats" | "style" | "attention">(null);
+  const closePanel = useCallback(() => setPanel(null), []);
 
   const nameRef = useRef<HTMLInputElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
@@ -89,6 +104,30 @@ export default function App() {
 
   useEffect(() => savePetState(pet), [pet]);
   useEffect(() => saveRLState(rl), [rl]);
+  useEffect(() => saveHabits(habits), [habits]);
+
+  // Real clock: refresh every 15s, and follow a real bedtime (asleep 22:00 to 07:00).
+  useEffect(() => {
+    const tick = () => {
+      const d = new Date();
+      setNow(d);
+      const night = isNightTime(d);
+      const was = nightRef.current;
+      nightRef.current = night;
+      const p = petRef.current;
+      if (!p.hatched || was === night) return;
+      if (night && !p.asleep) {
+        setPet((s) => ({ ...s, asleep: true }));
+        setLine("Yawn... it's late. Night night!");
+      } else if (!night && was !== null && p.asleep) {
+        setPet((s) => ({ ...s, asleep: false }));
+        setLine("Good morning! It's a new day.");
+      }
+    };
+    tick();
+    const id = setInterval(tick, 15_000);
+    return () => clearInterval(id);
+  }, []);
 
   const playFx = useCallback((kind: FxKind) => setFx({ kind, id: Date.now() + Math.random() }), []);
 
@@ -168,6 +207,7 @@ export default function App() {
     const before = petRef.current;
     const { rl: next, reward } = observe(rlRef.current, did, before);
     setRl(next);
+    setHabits((h) => recordHabit(h, did));
     if (reward === null) setLastOutcome(`Habit noted: you chose to ${ACTION_WORD[did]} here.`);
     else if (reward > 0) setLastOutcome(`+1: you did what it suggested (${did}). It's learning!`);
     else setLastOutcome(`${reward}: it suggested something else, you chose ${did}.`);
@@ -210,20 +250,17 @@ export default function App() {
 
   // ---- Hatching ----
   const hatch = useCallback(() => {
-    const name = hatchName.trim();
-    if (!name) {
-      nameRef.current?.focus();
-      setLine("Give me a name first!");
-      return;
-    }
     if (hatching) return;
     const species: SpeciesId =
       hatchSpecies === "surprise" ? SPECIES_IDS[Math.floor(Math.random() * SPECIES_IDS.length)] : hatchSpecies;
+    const name = hatchName.trim() || SPECIES[species].name;
     setHatching(true);
+    setEggTaps(2);
     setTimeout(() => {
       setPet((s) => hatchPet(s, name, species));
       prevEvolution.current = "hatchling";
       setHatching(false);
+      setEggTaps(0);
       playFx("hatch");
       feel("excited", 3000);
       lastDecay.current = Date.now();
@@ -234,13 +271,16 @@ export default function App() {
     }, 1400);
   }, [hatchName, hatchSpecies, hatching, playFx, feel, petSays]);
 
+  /** Tap the egg: it wobbles and cracks, and hatches on the third tap. */
   const tapEgg = useCallback(() => {
-    if (hatchName.trim()) hatch();
-    else {
-      setLine("Who am I? Name me first!");
-      nameRef.current?.focus();
-    }
-  }, [hatch, hatchName]);
+    if (hatching || petRef.current.hatched) return;
+    setEggTaps((t) => {
+      const next = t + 1;
+      if (next >= 3) setTimeout(hatch, 0);
+      else setLine(next === 1 ? "Something's moving in there!" : "It's cracking!");
+      return Math.min(next, 2);
+    });
+  }, [hatch, hatching]);
 
   // ---- Pages (hash routes: #/ and #/play) ----
   useEffect(() => {
@@ -261,6 +301,14 @@ export default function App() {
   }, [page]);
 
   const go = useCallback((target: Page, section?: string) => {
+    if (target === "play" && section === "shells") {
+      if (page !== "play") {
+        window.location.hash = "#/play";
+        setPage("play");
+      }
+      setPanel("style");
+      return;
+    }
     const hash = target === "play" ? "#/play" : "#/";
     if (target === page) {
       const el = section ? document.getElementById(section) : null;
@@ -420,7 +468,11 @@ export default function App() {
   const doReset = useCallback((keepBrain = false) => {
     setPet(resetPetState());
     if (keepBrain) setRl((r) => ({ ...r, pending: null, lastNudgeAt: Date.now() }));
-    else setRl(clearRLState());
+    else {
+      setRl(clearRLState());
+      setHabits(clearHabits());
+    }
+    setEggTaps(0);
     prevEvolution.current = "egg";
     setMessages([]);
     setGame(null);
@@ -444,7 +496,7 @@ export default function App() {
         tapEgg();
         return;
       }
-      if (id !== "stats") setView("pet");
+      setView("pet");
       switch (id) {
         case "feed":
         case "play":
@@ -453,25 +505,20 @@ export default function App() {
           break;
         case "study":
           setMode("study");
-          document.getElementById("play")?.scrollIntoView({ behavior: "smooth" });
+          setPanel("talk");
           break;
         case "talk":
-          chatInputRef.current?.focus();
-          document.getElementById("play")?.scrollIntoView({ behavior: "smooth" });
+          setPanel("talk");
           break;
         case "stats":
-          setView((v) => (v === "stats" ? "pet" : "stats"));
+          setPanel("stats");
           break;
-        case "mode": {
-          const i = MODES.findIndex((m) => m.id === p.mode);
-          setMode(MODES[(i + 1) % MODES.length].id);
+        case "style":
+          setPanel("style");
           break;
-        }
-        case "attention": {
-          const a = pendingAction(rlRef.current);
-          petSays(a ? nudgeLine(a, p.mode) : `All good! I think you'd ${ACTION_WORD[bestGuess(rlRef.current, p).best]} next.`);
+        case "attention":
+          setPanel("attention");
           break;
-        }
       }
     },
     [doCare, petSays, setMode, tapEgg],
@@ -489,17 +536,18 @@ export default function App() {
     (b: "A" | "B" | "C") => {
       if (b === "A") setSelected((s) => (s + 1) % ICONS.length);
       else if (b === "B") runIcon(ICONS[selected].id);
+      else if (panel) setPanel(null);
       else if (view === "stats") setView("pet");
       else if (petRef.current.hatched) doCare("pat");
       else tapEgg();
     },
-    [runIcon, selected, view, doCare, tapEgg],
+    [runIcon, selected, view, panel, doCare, tapEgg],
   );
 
   // Keyboard: arrows / A B C when not typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
- if (page !== "play") return;
+      if (page !== "play" || panel) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
@@ -509,12 +557,11 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onButton, page]);
+  }, [onButton, page, panel]);
 
   const pickSkin = useCallback((id: string) => {
     setSkinId(id);
     saveSkinId(id);
-    deviceRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, []);
 
   const pending = pendingAction(rl);
@@ -536,7 +583,6 @@ export default function App() {
       <main>
         {page === "home" ? (
           <HomePage
-            skin={skin}
             hatched={pet.hatched}
             petName={pet.petName}
             species={pet.species}
@@ -555,17 +601,26 @@ export default function App() {
                   )}
                   <TamagotchiShell skin={skin} selected={selected} attention={!!pending} onIcon={onIcon} onButton={onButton}>
                     <LcdScene
+                      scene={sceneId}
                       pet={pet}
                       emotion={emotion}
                       fx={fx}
                       view={view}
                       nudge={pending}
-                      cracked={hatching}
+                      crack={eggTaps}
+                      clock={clockText(now)}
                       onPetClick={() => doCare("pat")}
                       onEggClick={tapEgg}
                     />
                   </TamagotchiShell>
-                  <CareControls onCare={doCare} disabled={!pet.hatched} asleep={pet.asleep} />
+                  <CareControls
+                    onCare={doCare}
+                    disabled={!pet.hatched}
+                    asleep={pet.asleep}
+                    onTalk={() => setPanel("talk")}
+                    onStats={() => setPanel("stats")}
+                    onStyle={() => setPanel("style")}
+                  />
                   <p className="device-hint">
                     Tap the pet to pat it. Shell buttons: <b>A</b> next icon, <b>B</b> select, <b>C</b> back. Keyboard works too.
                   </p>
@@ -573,7 +628,7 @@ export default function App() {
 
                 <div className="stage-side">
                   {pet.hatched ? (
-                    <StatusMeters state={pet} brainNote={brainNote} onReset={doReset} />
+                    <StatusMeters state={pet} brainNote={brainNote} onReset={doReset} age={ageText(pet.bornAt, now.getTime())} />
                   ) : (
                     <HatchCard
                       name={hatchName}
@@ -589,74 +644,152 @@ export default function App() {
               </div>
             </section>
 
-            <section className="section" id="play">
+            <section className="section">
               <div className="wrap">
-                <div className="section-head">
-                  <span className="eyebrow pixel">PLAY</span>
-                  <h2>Talk, play and study together</h2>
-                  <p className="muted">Each mode changes how it talks and gives you something to do together.</p>
-                </div>
-                <div className="play-grid">
-                  <ChatPanel
-                    pet={pet}
-                    messages={messages}
-                    loading={loading}
-                    input={input}
-                    setInput={setInput}
-                    onSend={sendMessage}
-                    onMode={setMode}
-                    onRemember={remember}
-                    speechState={speechState}
-                    transcript={transcript}
-                    onMic={onMic}
-                    muted={muted}
-                    setMuted={setMuted}
-                    inputRef={chatInputRef}
-                  />
-                  <ActivityPanel
-                    pet={pet}
-                    game={game}
-                    quizActive={!!quiz}
-                    onJoke={onJoke}
-                    onStartGame={onStartGame}
-                    onGuess={onGuess}
-                    onBreakTask={onBreakTask}
-                    onStudyDone={onStudyDone}
-                    onQuiz={onQuiz}
-                    onForget={forget}
-                    onPat={() => doCare("pat")}
-                    busy={loading}
-                  />
-                  <BrainCard
-                    rl={rl}
-                    needs={pet}
-                    petName={pet.petName}
-                    fast={fast}
-                    setFast={setFast}
-                    onAskNow={askNow}
-                    lastOutcome={lastOutcome}
-                    hatched={pet.hatched}
-                  />
-                  <EvolutionCard pet={pet} onBoost={onBoost} />
-                </div>
+                <RLExplainer />
               </div>
             </section>
 
-            <section className="section tint" id="shells">
-              <div className="wrap">
-                <div className="section-head">
-                  <span className="eyebrow pixel">SHELLS</span>
-                  <h2>Pick a shell</h2>
-                  <p className="muted">{skin.name} is on right now. Tap any shell to swap; it's saved for next time.</p>
+            {panel === "talk" && (
+              <Popup title={`TALK TO ${(pet.petName || "your pet").toUpperCase()}`} onClose={closePanel}>
+                <ChatPanel
+                  pet={pet}
+                  messages={messages}
+                  loading={loading}
+                  input={input}
+                  setInput={setInput}
+                  onSend={sendMessage}
+                  onMode={setMode}
+                  onRemember={remember}
+                  speechState={speechState}
+                  transcript={transcript}
+                  onMic={onMic}
+                  muted={muted}
+                  setMuted={setMuted}
+                  inputRef={chatInputRef}
+                />
+                <ActivityPanel
+                  pet={pet}
+                  game={game}
+                  quizActive={!!quiz}
+                  onJoke={onJoke}
+                  onStartGame={onStartGame}
+                  onGuess={onGuess}
+                  onBreakTask={onBreakTask}
+                  onStudyDone={onStudyDone}
+                  onQuiz={onQuiz}
+                  onForget={forget}
+                  onPat={() => doCare("pat")}
+                  busy={loading}
+                />
+              </Popup>
+            )}
+
+            {panel === "stats" && (
+              <Popup title="STATS AND BRAIN" onClose={closePanel}>
+                <BrainCard
+                  rl={rl}
+                  needs={pet}
+                  petName={pet.petName}
+                  fast={fast}
+                  setFast={setFast}
+                  onAskNow={askNow}
+                  lastOutcome={lastOutcome}
+                  hatched={pet.hatched}
+                />
+                <HabitCard habits={habits} now={now} petName={pet.petName} />
+                <EvolutionCard pet={pet} onBoost={onBoost} />
+              </Popup>
+            )}
+
+            {panel === "style" && (
+              <Popup title="CUSTOMISE" onClose={closePanel}>
+                <div className="card">
+                  <h3>Change the background?</h3>
+                  <p className="muted">What's behind {pet.petName || "your pet"} on the screen.</p>
+                  <div className="scene-grid">
+                    {SCENES.map((sc) => (
+                      <button
+                        key={sc.id}
+                        type="button"
+                        className={`scene-pick ${sceneId === sc.id ? "active" : ""}`}
+                        aria-pressed={sceneId === sc.id}
+                        onClick={() => {
+                          setSceneId(sc.id);
+                          saveSceneId(sc.id);
+                        }}
+                      >
+                        <span className="scene-thumb">{sc.id === "lcd" ? <span className="lcd-plain" /> : <SceneArt id={sc.id} className="fill" />}</span>
+                        <span>{sc.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <ShellGallery current={skinId} onPick={pickSkin} />
-              </div>
-            </section>
+                <div className="card">
+                  <h3>Change the shell?</h3>
+                  <p className="muted">{skin.name} is on right now.</p>
+                  <ShellGallery current={skinId} onPick={pickSkin} />
+                </div>
+              </Popup>
+            )}
+
+            {panel === "attention" && (
+              <Popup title="ATTENTION" onClose={closePanel} size="small">
+                <div className="card attention-card">
+                  {pending ? (
+                    <>
+                      <p className="attention-line">
+                        <b>{pet.petName}</b> wants to <b>{pending === "chat" ? "chat" : pending}</b>.
+                      </p>
+                      <p className="muted small">Answering teaches its brain: do it (+1) or say not now (-0.5).</p>
+                      <div className="row-gap">
+                        <button
+                          type="button"
+                          className="pixel-btn"
+                          onClick={() => {
+                            if (pending === "chat") {
+                              setPanel("talk");
+                              teach("chat");
+                            } else {
+                              doCare(pending);
+                              setPanel(null);
+                            }
+                          }}
+                        >
+                          DO IT
+                        </button>
+                        <button
+                          type="button"
+                          className="pixel-btn plain"
+                          onClick={() => {
+                            setRl((r) => expire(r));
+                            setLastOutcome("-0.5: you said not now. Noted.");
+                            setLine("");
+                            setPanel(null);
+                          }}
+                        >
+                          NOT NOW
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="attention-line">All good! {pet.petName || "Your pet"} doesn't need anything right now.</p>
+                      <p className="muted small">
+                        When the <b>!</b> icon flashes, it has a suggestion for you. Its best guess for now: {ACTION_WORD[guessNow.best]}.
+                      </p>
+                      <button type="button" className="pixel-btn plain" onClick={closePanel}>OK</button>
+                    </>
+                  )}
+                </div>
+              </Popup>
+            )}
           </>
         )}
       </main>
 
       <Footer go={go} />
+      <StickerRail page={page} />
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );

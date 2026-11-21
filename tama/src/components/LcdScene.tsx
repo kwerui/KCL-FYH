@@ -3,7 +3,7 @@ import type { PetEmotion } from "../ai/types";
 import { BALL, HEART, RICE_BALL, RICE_BALL_BITTEN, SPARKLE, TEAR, Z, type Sprite } from "../art/sprites";
 import type { PetState } from "../game/petState";
 import type { RLAction } from "../game/rl";
-import { PetCrowd } from "./PetCrowd";
+import { SCENES, SceneArt, type SceneId } from "../art/scenes";
 import { PixelArt } from "./PixelArt";
 import { PetSprite } from "./PetSprite";
 
@@ -11,12 +11,14 @@ export type FxKind = "feed" | "play" | "pat" | "evolve" | "hatch" | "win" | "res
 export type Fx = { kind: FxKind; id: number };
 
 type Props = {
+  scene: SceneId;
   pet: PetState;
   emotion: PetEmotion;
   fx: Fx | null;
   view: "pet" | "stats";
   nudge: RLAction | null;
-  cracked: boolean;
+  crack: number; // egg taps so far
+  clock: string;
   onPetClick: () => void;
   onEggClick: () => void;
 };
@@ -40,7 +42,7 @@ function Sp({ s, size, style, className }: { s: Sprite; size: number; style?: CS
   );
 }
 
-export function LcdScene({ pet, emotion, fx, view, nudge, cracked, onPetClick, onEggClick }: Props) {
+export function LcdScene({ scene, pet, emotion, fx, view, nudge, crack, clock, onPetClick, onEggClick }: Props) {
   const [x, setX] = useState(65);
   const [facing, setFacing] = useState<1 | -1>(1);
   const [active, setActive] = useState<Fx | null>(null);
@@ -96,7 +98,6 @@ export function LcdScene({ pet, emotion, fx, view, nudge, cracked, onPetClick, o
   }, [busy, pace]);
 
   // Before hatching, the screen shows the pets bouncing around (cycles through all nine).
-  const attract = !pet.hatched && !cracked;
 
   const anim = active
     ? `fx-${active.kind}`
@@ -123,9 +124,11 @@ export function LcdScene({ pet, emotion, fx, view, nudge, cracked, onPetClick, o
   const petLeft = pet.hatched ? x : (LCD_W - PET_W) / 2;
 
   return (
-    <div className={`lcd-scene ${pet.asleep ? "night" : ""}`}>
+    <div className={`lcd-scene ${pet.asleep ? "night" : ""} ${SCENES.find((x) => x.id === scene)?.dark ? "dark-scene" : ""}`}>
+      <SceneArt id={scene} className="fill scene-bg" />
       <div className="lcd-grid" />
       {pet.hatched && <div className="lcd-mode">{MODE_LABEL[pet.mode]}</div>}
+      <div className="lcd-clock">{clock}</div>
 
       {view === "stats" && pet.hatched ? (
         <div className="lcd-stats">
@@ -152,8 +155,6 @@ export function LcdScene({ pet, emotion, fx, view, nudge, cracked, onPetClick, o
         </div>
       ) : (
         <>
-          {attract && <PetCrowd onClick={onEggClick} label="Tap to hatch your own pet" />}
-          {!attract && (
           <button
             type="button"
             className={`pet-wrap ${pet.hatched ? "" : "egg"} ${active?.kind === "evolve" || active?.kind === "hatch" ? "flash" : ""}`}
@@ -162,18 +163,20 @@ export function LcdScene({ pet, emotion, fx, view, nudge, cracked, onPetClick, o
             aria-label={pet.hatched ? `Pat ${pet.petName}` : "Tap the egg"}
           >
             <span className={`pet-flip ${facing < 0 ? "left" : ""}`}>
-              <span className={`pet-anim ${anim} ${pet.evolution === "hatchling" ? "small" : ""}`} key={active?.id ?? "idle"}>
+              <span
+                className={`pet-anim ${anim} ${pet.evolution === "hatchling" ? "small" : ""}`}
+                key={pet.hatched ? (active?.id ?? "idle") : `egg-${crack}`}
+              >
                 <PetSprite
                   className="fill"
                   species={pet.species}
                   evolution={pet.hatched ? pet.evolution : "egg"}
                   eyesClosed={pet.asleep || emotion === "sleepy"}
-                  cracked={cracked}
+                  crack={crack}
                 />
               </span>
             </span>
           </button>
-          )}
 
           {bubble && (
             <div className="lcd-bubble" style={{ left: u(Math.min(LCD_W - 34, petLeft + PET_W - 22)) }}>
@@ -215,7 +218,7 @@ export function LcdScene({ pet, emotion, fx, view, nudge, cracked, onPetClick, o
                 style={{ left: u(petLeft + 70 + i * 10), animationDelay: `${i * 0.7}s` }}
               />
             ))}
-          {!pet.hatched && <div className="lcd-hint bottom">{cracked ? "!!!" : "tap to hatch"}</div>}
+          {!pet.hatched && <div className="lcd-hint bottom">{crack >= 2 ? "one more!" : crack === 1 ? "keep tapping!" : "tap to hatch"}</div>}
         </>
       )}
     </div>

@@ -1,11 +1,10 @@
-import type { Skin } from "../art/skins";
 import type { SpeciesId } from "../art/pets";
 import { HowItWorks, PetGallery } from "./Galleries";
-import { PetCrowd } from "./PetCrowd";
-import { TamagotchiShell } from "./TamagotchiShell";
+import { BigLogo } from "./Brand";
+
+import { SceneWall, ShellCluster } from "./Showcase";
 
 type Props = {
-  skin: Skin;
   hatched: boolean;
   petName: string;
   species: SpeciesId;
@@ -14,12 +13,14 @@ type Props = {
 };
 
 /** The intro page: what the project is, the pets, and how it learns. The actual pet lives on the My Pet page. */
-export function HomePage({ skin, hatched, petName, species, onPlay, onHow }: Props) {
+export function HomePage({ hatched, petName, species, onPlay, onHow }: Props) {
   return (
     <>
-      <section className="hero">
+      <section className="hero scene-hero">
+        <SceneWall />
         <div className="wrap hero-grid">
-          <div className="hero-copy intro">
+          <div className="hero-copy intro hero-panel">
+            <BigLogo />
             <span className="badge pixel">KCL FIRSTYEARHACK 2026 / RETRO REMIX</span>
             <h1>
               A pocket pet,
@@ -46,21 +47,7 @@ export function HomePage({ skin, hatched, petName, species, onPlay, onHow }: Pro
             </ul>
           </div>
 
-          <div className="hero-device showcase">
-            <TamagotchiShell
-              skin={skin}
-              selected={-1}
-              attention={false}
-              onIcon={onPlay}
-              onButton={onPlay}
-            >
-              <div className="lcd-scene">
-                <div className="lcd-grid" />
-                <PetCrowd onClick={onPlay} label="Go to My Pet" />
-                <div className="lcd-hint bottom">press any button</div>
-              </div>
-            </TamagotchiShell>
-          </div>
+          <ShellCluster onClick={onPlay} />
         </div>
       </section>
 

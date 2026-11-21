@@ -157,6 +157,24 @@ function closeEpisode(rl: RLState, reward: number): RLState {
   };
 }
 
+/** Build a context id directly (used by the explainer sandbox). time: 0 night, 1 morning, 2 afternoon, 3 evening. */
+export function contextFrom(time: number, hungry: boolean, tired: boolean, sad: boolean): number {
+  return time * 8 + ((hungry ? 4 : 0) | (tired ? 2 : 0) | (sad ? 1 : 0));
+}
+
+/** Epsilon-greedy choice for a given context. */
+export function pickAction(rl: RLState, context: number): { action: number; explored: boolean } {
+  const explored = Math.random() < rl.epsilon;
+  return { action: explored ? Math.floor(Math.random() * RL_ACTIONS.length) : argmax(rl.q[context]), explored };
+}
+
+/** One full step: reward an action in a context, decay epsilon, log the reward. */
+export function applyReward(rl: RLState, context: number, action: number, reward: number): RLState {
+  return closeEpisode({ ...rl, pending: { context, action, at: Date.now() } }, reward);
+}
+
+export const RL_PARAMS = { alpha: ALPHA, epsilonStart: EPSILON_START, epsilonMin: EPSILON_MIN, epsilonDecay: EPSILON_DECAY };
+
 /** You did something. Reward the pending suggestion, or learn the habit by watching. */
 export function observe(rl: RLState, did: RLAction, needsBefore: Needs): { rl: RLState; reward: number | null } {
   const idx = RL_ACTIONS.indexOf(did);
