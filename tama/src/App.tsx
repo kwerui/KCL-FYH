@@ -18,6 +18,7 @@ import {
 import { applyCareAction, applyConversationBonus, applyDelta, applyPassiveDecay, type CareAction } from "./game/careLogic";
 import { FORM_INFO, type Trait } from "./game/evolutionLogic";
 import { hatchPet, loadPetState, MAX_FACTS, resetPetState, savePetState, type PetState } from "./game/petState";
+import { completeFrontendStudySession, type StudyTimer as StudyTimerState } from "./game/studyTimer";
 import {
   RL_ACTIONS, bestGuess, clearRLState, describeContext, expire, loadRLState, nudgeLine, observe, pendingAction,
   saveRLState, suggest, type RLAction, type RLState,
@@ -419,8 +420,8 @@ export default function App() {
 
   const onBreakTask = useCallback((task: string) => void sendMessage(`Break this task into steps: ${task}`), [sendMessage]);
 
-  const onStudyDone = useCallback(() => {
-    setPet((s) => applyDelta(s, { curiosity: +15, happiness: +8 }));
+  const onStudyDone = useCallback((timer: StudyTimerState) => {
+    setPet((s) => completeFrontendStudySession(timer, s).pet);
     playFx("win");
     feel("excited");
     petSays("Focus session complete! You're getting so smart.", { chat: true, voice: true });

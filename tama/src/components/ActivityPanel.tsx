@@ -3,6 +3,7 @@ import type { PetState } from "../game/petState";
 import { MAX_FACTS } from "../game/petState";
 import type { GuessGame } from "../game/activities";
 import { StudyTimer } from "./StudyTimer";
+import type { StudyTimer as StudyTimerState } from "../game/studyTimer";
 
 type Props = {
   pet: PetState;
@@ -12,7 +13,7 @@ type Props = {
   onStartGame: () => void;
   onGuess: (n: number) => void;
   onBreakTask: (task: string) => void;
-  onStudyDone: () => void;
+  onStudyDone: (timer: StudyTimerState) => void;
   onQuiz: () => void;
   onForget: (fact: string | null) => void;
   onPat: () => void;
