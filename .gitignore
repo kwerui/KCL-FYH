@@ -2,3 +2,12 @@
 .claude/
 .idea/
 .DS_Store
+
+# Build output and dependencies
+node_modules/
+dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
