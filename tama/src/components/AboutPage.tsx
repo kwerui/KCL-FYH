@@ -1,14 +1,16 @@
 import type { SpeciesId } from "../art/pets";
-import { HowItWorks, PetGallery } from "./Galleries";
+import { HowItWorks, PetGallery, ShellGallery } from "./Galleries";
 
 type Props = {
   hatched: boolean;
   petName: string;
   species: SpeciesId;
   onPlay: () => void;
+  skinId: string;
+  onPickSkin: (id: string) => void;
 };
 
-export function AboutPage({ hatched, petName, species, onPlay }: Props) {
+export function AboutPage({ hatched, petName, species, onPlay, skinId, onPickSkin }: Props) {
   return (
     <>
       <section className="section" id="pets">
@@ -24,6 +26,17 @@ export function AboutPage({ hatched, petName, species, onPlay }: Props) {
               {hatched ? `Visit ${petName}` : "Pick yours and hatch it"}
             </button>
           </div>
+        </div>
+      </section>
+
+      <section className="section" id="shells">
+        <div className="wrap">
+          <div className="section-head">
+            <span className="eyebrow pixel">SHELLS</span>
+            <h2>23 shells to choose from.</h2>
+            <p className="muted">Pick a look for your device. Changes take effect instantly.</p>
+          </div>
+          <ShellGallery current={skinId} onPick={onPickSkin} />
         </div>
       </section>
 

@@ -17,14 +17,14 @@ import {
   breakTask, checkAnswer, guess, newGuessGame, quizQuestion, tellJoke, type GuessGame,
 } from "./game/activities";
 import { applyCareAction, applyConversationBonus, applyDelta, applyPassiveDecay, canPlay, type CareAction } from "./game/careLogic";
+import { completeFrontendStudySession, type StudyTimer as StudyTimerState } from "./game/studyTimer";
 import { FORM_INFO, type Trait } from "./game/evolutionLogic";
 import { hatchPet, loadPetState, MAX_FACTS, resetPetState, savePetState, type PetState } from "./game/petState";
-import { completeFrontendStudySession, type StudyTimer as StudyTimerState } from "./game/studyTimer";
 import {
   RL_ACTIONS, bestGuess, clearRLState, describeContext, expire, loadRLState, nudgeLine, observe, pendingAction,
   saveRLState, suggest, type RLAction, type RLState,
 } from "./game/rl";
-import { useSpeech } from "./hooks/useSpeech";
+import { useSpeech } from "../../src/voice/useSpeech";
 import {
   ageText, clearHabits, clockText, isNightTime, loadHabits, recordHabit, saveHabits, type Habits,
 } from "./game/clock";
@@ -82,6 +82,7 @@ export default function App() {
   const [now, setNow] = useState(() => new Date());
   const nightRef = useRef<boolean | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [chatSource, setChatSource] = useState<"gemini" | "fallback" | null>(null);
   const [page, setPage] = useState<Page>(() =>
     window.location.hash.startsWith("#/play") ? "play" :
     window.location.hash.startsWith("#/about") ? "about" : "home"
@@ -428,12 +429,13 @@ export default function App() {
           energy: p.energy,
           happiness: p.happiness,
         });
-        petSays(res.reply, { chat: true, voice: true });
-        feel(res.emotion, 3200);
+        setChatSource(res.source);
+        petSays(res.response.reply, { chat: true, voice: true });
+        feel(res.response.emotion, 3200);
         setPet((s) => applyConversationBonus(s, s.mode, demoRef.current));
-        if (res.suggestedAction) {
+        if (res.response.suggestedAction) {
           const hint: Record<string, string> = { feed: "food", play: "a play session", rest: "a rest" };
-          setTimeout(() => setLine(`${petRef.current.petName} could use some ${hint[res.suggestedAction!]}.`), 3400);
+          setTimeout(() => setLine(`${petRef.current.petName} could use some ${hint[res.response.suggestedAction!]}.`), 3400);
         }
       } catch {
         petSays("...bzzt... my antenna is fuzzy. Try again?", { chat: true });
@@ -494,8 +496,8 @@ export default function App() {
 
   const onBreakTask = useCallback((task: string) => void sendMessage(`Break this task into steps: ${task}`), [sendMessage]);
 
-  const onStudyDone = useCallback(() => {
-    setPet((s) => applyDelta(s, { curiosity: +15, happiness: +8 }, demoRef.current));
+  const onStudyDone = useCallback((timer: StudyTimerState) => {
+    setPet((s) => completeFrontendStudySession(timer, s).pet);
     playFx("win");
     feel("excited");
     petSays("Focus session complete! You're getting so smart.", { chat: true, voice: true });
@@ -654,6 +656,8 @@ export default function App() {
             petName={pet.petName}
             species={pet.species}
             onPlay={goToPet}
+            skinId={skinId}
+            onPickSkin={pickSkin}
           />
         ) : (
           <>
@@ -727,12 +731,23 @@ export default function App() {
                   onSend={sendMessage}
                   onMode={setMode}
                   onRemember={remember}
-                  speechState={speechState}
-                  transcript={transcript}
+                  isListening={isListening}
+                  isRecognitionSupported={isRecognitionSupported}
+                  isSynthesisSupported={isSynthesisSupported}
+                  transcript={recognisedText}
+                  voiceError={speechError?.message ?? null}
                   onMic={onMic}
-                  muted={muted}
+                  muted={isMuted}
                   setMuted={setMuted}
+                  voices={voices}
+                  voicePreferences={voicePreferences}
+                  setVoiceURI={setVoiceURI}
+                  setVoicePitch={setVoicePitch}
+                  setVoiceRate={setVoiceRate}
+                  onCutePreset={useCutePixrlVoice}
+                  onPreviewVoice={previewVoice}
                   inputRef={chatInputRef}
+                  responseSource={chatSource}
                 />
                 <ActivityPanel
                   pet={pet}
