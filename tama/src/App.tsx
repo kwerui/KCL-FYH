@@ -538,6 +538,7 @@ export default function App() {
     setView("pet");
     setLastOutcome(keepBrain ? "Kept what it learned about your habits." : "Waiting for its first suggestion.");
     setHatchSpecies("surprise");
+    setChatSource(null);
     setEmotion("happy");
     cancelListening();
     cancelSpeech();

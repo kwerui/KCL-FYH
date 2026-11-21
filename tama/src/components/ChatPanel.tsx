@@ -34,6 +34,7 @@ type Props = {
   onCutePreset: () => void;
   onPreviewVoice: () => boolean;
   inputRef: React.RefObject<HTMLInputElement | null>;
+  responseSource: "gemini" | "fallback" | null;
 };
 
 export function ChatPanel(p: Props) {
@@ -125,6 +126,7 @@ export function ChatPanel(p: Props) {
         </button>
       </form>
       {p.voiceError && <p className="muted" role="alert">{p.voiceError}</p>}
+      {p.responseSource && <p className="muted small">Chat source: {p.responseSource === "gemini" ? "Gemini" : "local fallback"}</p>}
     </section>
   );
 }
