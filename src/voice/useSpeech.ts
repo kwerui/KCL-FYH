@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 type RecognitionResultLike = {
   0: { transcript: string };
+  isFinal: boolean;
 };
 
 type RecognitionEventLike = Event & {
@@ -40,6 +41,8 @@ export type SpeechError = {
 export type UseSpeechOptions = {
   /** BCP 47 language tag passed to browser speech recognition. */
   language?: string;
+  /** Called once when the browser marks a recognition result as final. */
+  onFinalTranscript?: (text: string) => void;
 };
 
 export type SpeechControls = {
@@ -85,17 +88,24 @@ function recognitionErrorMessage(code: string): string {
  * spoken audio and text: callers decide how recognised text is sent to an AI.
  */
 export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
-  const { language = "en-GB" } = options;
+  const { language = "en-GB", onFinalTranscript } = options;
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const mutedRef = useRef(false);
   const isCancellingRecognitionRef = useRef(false);
+  const isStartingRecognitionRef = useRef(false);
+  const hasFinalTranscriptRef = useRef(false);
+  const onFinalTranscriptRef = useRef(onFinalTranscript);
 
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isMuted, setIsMutedState] = useState(false);
   const [recognisedText, setRecognisedText] = useState("");
   const [error, setError] = useState<SpeechError | null>(null);
+
+  useEffect(() => {
+    onFinalTranscriptRef.current = onFinalTranscript;
+  }, [onFinalTranscript]);
 
   const isRecognitionSupported = Boolean(getRecognitionConstructor());
   const isSynthesisSupported =
@@ -178,7 +188,14 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
       for (let index = 0; index < event.results.length; index += 1) {
         transcript += event.results[index][0].transcript;
       }
-      setRecognisedText(transcript.trim());
+      const recognised = transcript.trim();
+      setRecognisedText(recognised);
+
+      const latestResult = event.results[event.results.length - 1];
+      if (latestResult.isFinal && recognised && !hasFinalTranscriptRef.current) {
+        hasFinalTranscriptRef.current = true;
+        onFinalTranscriptRef.current?.(recognised);
+      }
     };
     recognition.onerror = (event) => {
       setIsListening(false);
@@ -197,6 +214,8 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
   }, [language]);
 
   const startListening = useCallback(async () => {
+    if (isStartingRecognitionRef.current) return;
+
     const recognition = getRecognition();
     if (!recognition) {
       setError({
@@ -215,10 +234,13 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
     }
 
     try {
+      isStartingRecognitionRef.current = true;
       // Prompt for permission before starting the recognition service.
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((track) => track.stop());
       isCancellingRecognitionRef.current = false;
+      hasFinalTranscriptRef.current = false;
+      setRecognisedText("");
       setError(null);
       setIsListening(true);
       recognition.start();
@@ -231,6 +253,8 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
           ? "Microphone access was denied. You can still type your message."
           : "The microphone could not be started. Please try again or type your message.",
       });
+    } finally {
+      isStartingRecognitionRef.current = false;
     }
   }, [getRecognition]);
 
@@ -240,6 +264,7 @@ export function useSpeech(options: UseSpeechOptions = {}): SpeechControls {
 
   const cancelListening = useCallback(() => {
     isCancellingRecognitionRef.current = true;
+    hasFinalTranscriptRef.current = true;
     recognitionRef.current?.abort();
     setIsListening(false);
   }, []);
