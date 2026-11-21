@@ -340,6 +340,20 @@ button:disabled {
   text-decoration: none;
 }
 
+.jb-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: #cfc6e6;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+.jb-badge:hover { opacity: 1; }
+.jb-badge svg { flex-shrink: 0; border-radius: 4px; }
+
 /* ===== Hero ===== */
 .hero {
   background: linear-gradient(180deg, var(--cream) 0%, #ede6fd 100%);
@@ -590,6 +604,63 @@ button:disabled {
   display: block;
   image-rendering: pixelated;
 }
+
+/* ===== Minimal home hero ===== */
+.home-hero {
+  background: var(--ink);
+  background-image: none;
+  padding: 64px 0 88px;
+}
+
+.home-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px;
+  align-items: center;
+}
+
+.home-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.home-badge {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.65);
+  align-self: flex-start;
+}
+
+.home-h1 {
+  font-size: clamp(38px, 4.8vw, 60px);
+  color: #fff;
+  line-height: 1.08;
+}
+
+.home-accent {
+  color: var(--yellow);
+}
+
+.home-lead {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.6);
+  max-width: 36em;
+  line-height: 1.65;
+}
+
+.btn-link-light {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 0;
+  transition: color 0.15s;
+  align-self: flex-start;
+}
+.btn-link-light:hover { color: #fff; }
 
 /* panel behind the copy so it stays readable over the busy wall */
 .hero-panel {
@@ -2913,14 +2984,17 @@ body.dragging-sticker * {
     grid-template-columns: minmax(0, 1fr);
   }
   .shell-cluster {
-    min-height: 560px;
+    min-height: 440px;
     order: -1;
   }
+  .home-copy { text-align: center; align-items: center; }
+  .home-badge, .btn-link-light { align-self: auto; }
   .cluster-shell.s-big {
     width: 320px;
     margin-left: -160px;
   }
   .hero-grid,
+  .home-hero-grid,
   .stage-grid,
   .play-grid {
     grid-template-columns: minmax(0, 1fr);

@@ -26,7 +26,7 @@ export function LogoMark({ size = 40 }: { size?: number }) {
   );
 }
 
-export type Page = "home" | "play";
+export type Page = "home" | "play" | "about";
 
 const BIG_COLOURS = ["#B9A7F0", "#F7A6B9", "#8FE3C6", "#FFD24D"];
 
@@ -75,7 +75,7 @@ export function Logo({ size = 40, light = false, go }: { size?: number; light?: 
 function NavLink({ go, page, section, children, active }: { go: Go; page: Page; section?: string; children: string; active?: boolean }) {
   return (
     <a
-      href={page === "play" ? "#/play" : "#/"}
+      href={page === "play" ? "#/play" : page === "about" ? "#/about" : "#/"}
       className={active ? "active" : undefined}
       onClick={(e) => {
         e.preventDefault();
@@ -93,9 +93,9 @@ export function Header({ page, go, hatched }: { page: Page; go: Go; hatched: boo
       <div className="wrap header-inner">
         <Logo size={36} go={go} />
         <nav className="nav" aria-label="Main">
-          <NavLink go={go} page="home" active={page === "home"}>About</NavLink>
-          <NavLink go={go} page="home" section="pets">Pets</NavLink>
-          <NavLink go={go} page="home" section="how">How it learns</NavLink>
+          <NavLink go={go} page="home" active={page === "home"}>Home</NavLink>
+          <NavLink go={go} page="about" section="pets" active={page === "about"}>Pets</NavLink>
+          <NavLink go={go} page="about" section="how">How it learns</NavLink>
           <NavLink go={go} page="play" active={page === "play"}>My Pet</NavLink>
         </nav>
         <button type="button" className="btn btn-primary" onClick={() => go("play", page === "play" && hatched ? "shells" : undefined)}>
@@ -114,9 +114,28 @@ export function Footer({ go }: { go: Go }) {
         <p>A 1990s virtual pet, rebuilt for 2026. Made at KCL FirstYearHack, Retro Remix track.</p>
         <nav className="footer-links" aria-label="Footer">
           <a href="https://github.com/kwerui/KCL-FYH" target="_blank" rel="noreferrer">GitHub</a>
-          <NavLink go={go} page="home" section="how">How it learns</NavLink>
+          <NavLink go={go} page="about" section="how">How it learns</NavLink>
           <NavLink go={go} page="play">My Pet</NavLink>
         </nav>
+        <a
+          className="jb-badge"
+          href="https://www.jetbrains.com/"
+          target="_blank"
+          rel="noreferrer"
+          title="Built with JetBrains IDEs"
+        >
+          <svg width="22" height="22" viewBox="0 0 70 70" aria-hidden="true">
+            <rect width="70" height="70" rx="8" fill="#000"/>
+            <rect x="8" y="8" width="30" height="30" fill="#fff"/>
+            <rect x="8" y="42" width="14" height="4" fill="#fff"/>
+            <rect x="26" y="42" width="14" height="4" fill="#fff"/>
+            <rect x="44" y="8" width="4" height="54" fill="#fff"/>
+            <rect x="52" y="8" width="10" height="4" fill="#fff"/>
+            <rect x="58" y="12" width="4" height="10" fill="#fff"/>
+            <rect x="52" y="22" width="10" height="4" fill="#fff"/>
+          </svg>
+          <span>Built with JetBrains</span>
+        </a>
       </div>
     </footer>
   );

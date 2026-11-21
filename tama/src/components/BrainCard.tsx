@@ -6,8 +6,8 @@ export function BrainCard({
   rl,
   needs,
   petName,
-  fast,
-  setFast,
+  demo,
+  setDemo,
   onAskNow,
   lastOutcome,
   hatched,
@@ -15,8 +15,8 @@ export function BrainCard({
   rl: RLState;
   needs: Needs;
   petName: string;
-  fast: boolean;
-  setFast: (b: boolean) => void;
+  demo: boolean;
+  setDemo: (b: boolean) => void;
   onAskNow: () => void;
   lastOutcome: string;
   hatched: boolean;
@@ -81,8 +81,8 @@ export function BrainCard({
           {pending ? `Waiting: suggested ${LABEL[pending]}` : "Make a suggestion now"}
         </button>
         <label className="toggle">
-          <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} />
-          <span>Demo speed</span>
+          <input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} />
+          <span>Demo mode</span>
         </label>
       </div>
     </section>

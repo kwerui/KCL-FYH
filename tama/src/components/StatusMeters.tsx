@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ALL_SPECIES, SPECIES, type SpeciesId } from "../art/pets";
-import { FORM_INFO, evolutionProgress } from "../game/evolutionLogic";
+import { FORM_INFO, evolutionProgress, msUntilCanEvolve, formatTimeUntil } from "../game/evolutionLogic";
 import type { PetState } from "../game/petState";
 import { PetSprite } from "./PetSprite";
 import { PixelArt } from "./PixelArt";
@@ -39,15 +39,20 @@ export function StatusMeters({
   brainNote,
   onReset,
   age,
+  demo,
+  now,
 }: {
   state: PetState;
   brainNote: string;
   onReset: (keepBrain: boolean) => void;
   age: string;
+  demo: boolean;
+  now: Date;
 }) {
   const [confirm, setConfirm] = useState(false);
   const [keepBrain, setKeepBrain] = useState(false);
   const progress = evolutionProgress(state);
+  const msLeft = state.hatched ? msUntilCanEvolve(state.bornAt, demo, now.getTime()) : 0;
   return (
     <section className="card status-card" aria-label="Pet status">
       <div className="pet-row">
@@ -78,6 +83,11 @@ export function StatusMeters({
             <i style={{ width: `${progress * 100}%` }} />
           </span>
         </div>
+      )}
+      {state.hatched && (state.evolution === "hatchling" || state.evolution === "egg") && msLeft > 0 && (
+        <p className="muted small grow-up-note">
+          Grows up in <b>{formatTimeUntil(msLeft)}</b>
+        </p>
       )}
       <p className="brain-note">
         <span className="pixel">BRAIN</span> {brainNote}

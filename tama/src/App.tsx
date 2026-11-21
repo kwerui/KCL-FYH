@@ -16,7 +16,7 @@ import { SCENES, SceneArt, loadSceneId, saveSceneId, type SceneId } from "./art/
 import {
   breakTask, checkAnswer, guess, newGuessGame, quizQuestion, tellJoke, type GuessGame,
 } from "./game/activities";
-import { applyCareAction, applyConversationBonus, applyDelta, applyPassiveDecay, type CareAction } from "./game/careLogic";
+import { applyCareAction, applyConversationBonus, applyDelta, applyPassiveDecay, canPlay, type CareAction } from "./game/careLogic";
 import { FORM_INFO, type Trait } from "./game/evolutionLogic";
 import { hatchPet, loadPetState, MAX_FACTS, resetPetState, savePetState, type PetState } from "./game/petState";
 import {
@@ -39,6 +39,7 @@ import { EvolutionCard } from "./components/EvolutionCard";
 import { HabitCard } from "./components/HabitCard";
 import { ShellGallery } from "./components/Galleries";
 import { StickerRail } from "./components/StickerRail";
+import { AboutPage } from "./components/AboutPage";
 import { HomePage } from "./components/HomePage";
 import { LcdScene, type Fx, type FxKind } from "./components/LcdScene";
 import { MODES } from "./components/ModeSelector";
@@ -68,7 +69,7 @@ export default function App() {
   const [view, setView] = useState<"pet" | "stats">("pet");
   const [selected, setSelected] = useState(0);
   const [line, setLine] = useState<string>("");
-  const [fast, setFast] = useState(true);
+  const [demo, setDemo] = useState(() => localStorage.getItem("tama_demo") === "1");
   const [lastOutcome, setLastOutcome] = useState("Waiting for its first suggestion.");
   const [game, setGame] = useState<GuessGame | null>(null);
   const [quiz, setQuiz] = useState<{ q: string; a: string } | null>(null);
@@ -80,7 +81,10 @@ export default function App() {
   const [now, setNow] = useState(() => new Date());
   const nightRef = useRef<boolean | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [page, setPage] = useState<Page>(() => (window.location.hash.startsWith("#/play") ? "play" : "home"));
+  const [page, setPage] = useState<Page>(() =>
+    window.location.hash.startsWith("#/play") ? "play" :
+    window.location.hash.startsWith("#/about") ? "about" : "home"
+  );
   const scrollTarget = useRef<string | null>(null);
   const [panel, setPanel] = useState<null | "talk" | "stats" | "style" | "attention">(null);
   const closePanel = useCallback(() => setPanel(null), []);
@@ -92,8 +96,8 @@ export default function App() {
   petRef.current = pet;
   const rlRef = useRef(rl);
   rlRef.current = rl;
-  const fastRef = useRef(fast);
-  fastRef.current = fast;
+  const demoRef = useRef(demo);
+  demoRef.current = demo;
   const lastDecay = useRef(Date.now());
   const lastPat = useRef(0);
   const emotionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -164,10 +168,10 @@ export default function App() {
 
       if (now - lastDecay.current >= DECAY_MS) {
         lastDecay.current = now;
-        setPet((s) => applyPassiveDecay(s));
+        setPet((s) => applyPassiveDecay(s, demoRef.current));
       }
 
-      const t = fastRef.current ? TIMING.fast : TIMING.normal;
+      const t = demoRef.current ? TIMING.fast : TIMING.normal;
       const brain = rlRef.current;
       if (brain.pending && now - brain.pending.at > t.window) {
         const missed = RL_ACTIONS[brain.pending.action];
@@ -221,7 +225,7 @@ export default function App() {
       if (action === "pat") {
         if (Date.now() - lastPat.current < 500) return;
         lastPat.current = Date.now();
-        setPet((s) => applyCareAction(s, "pat"));
+        setPet((s) => applyCareAction(s, "pat", demoRef.current));
         playFx("pat");
         feel("happy");
         if (Math.random() < 0.35) petSays(["Hehe!", "More pats please.", "I like you.", "Purr..."][Math.floor(Math.random() * 4)]);
@@ -238,7 +242,13 @@ export default function App() {
         teach("feed");
         return;
       }
-      setPet((s) => applyCareAction(s, action));
+      if (action === "play" && !canPlay(p)) {
+        feel("sad", 1500);
+        petSays("Too tired to play...");
+        teach("play");
+        return;
+      }
+      setPet((s) => applyCareAction(s, action, demoRef.current));
       teach(action);
       playFx(action);
       if (action === "feed") feel("happy", 2800);
@@ -284,7 +294,11 @@ export default function App() {
 
   // ---- Pages (hash routes: #/ and #/play) ----
   useEffect(() => {
-    const onHash = () => setPage(window.location.hash.startsWith("#/play") ? "play" : "home");
+    const onHash = () =>
+      setPage(
+        window.location.hash.startsWith("#/play") ? "play" :
+        window.location.hash.startsWith("#/about") ? "about" : "home"
+      );
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -309,7 +323,7 @@ export default function App() {
       setPanel("style");
       return;
     }
-    const hash = target === "play" ? "#/play" : "#/";
+    const hash = target === "play" ? "#/play" : target === "about" ? "#/about" : "#/";
     if (target === page) {
       const el = section ? document.getElementById(section) : null;
       if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -353,7 +367,7 @@ export default function App() {
         setGame(r.game);
         petSays(r.line, { chat: true, voice: true });
         if (r.won) {
-          setPet((s) => applyDelta(s, { playfulness: +10, happiness: +8 }));
+          setPet((s) => applyDelta(s, { playfulness: +10, happiness: +8 }, demoRef.current));
           playFx("win");
           feel("excited");
         }
@@ -363,14 +377,14 @@ export default function App() {
         const right = checkAnswer(text, quiz.a);
         setQuiz(null);
         petSays(right ? `Yes! ${quiz.a}. Brain +1!` : `Close! The answer is: ${quiz.a}.`, { chat: true, voice: true });
-        setPet((s) => applyDelta(s, { curiosity: right ? +8 : +3, happiness: right ? +5 : 0 }));
+        setPet((s) => applyDelta(s, { curiosity: right ? +8 : +3, happiness: right ? +5 : 0 }, demoRef.current));
         feel(right ? "excited" : "thinking");
         return;
       }
 
       if (p.mode === "serious" && /^break this task into steps:/i.test(text)) {
         petSays(breakTask(text.replace(/^break this task into steps:/i, "")), { chat: true, voice: true });
-        setPet((s) => applyDelta(s, { curiosity: +3, happiness: +2 }));
+        setPet((s) => applyDelta(s, { curiosity: +3, happiness: +2 }, demoRef.current));
         feel("thinking");
         return;
       }
@@ -390,7 +404,11 @@ export default function App() {
         });
         petSays(res.reply, { chat: true, voice: true });
         feel(res.emotion, 3200);
-        setPet((s) => applyConversationBonus(s, s.mode));
+        setPet((s) => applyConversationBonus(s, s.mode, demoRef.current));
+        if (res.suggestedAction) {
+          const hint: Record<string, string> = { feed: "food", play: "a play session", rest: "a rest" };
+          setTimeout(() => setLine(`${petRef.current.petName} could use some ${hint[res.suggestedAction!]}.`), 3400);
+        }
       } catch {
         petSays("...bzzt... my antenna is fuzzy. Try again?", { chat: true });
         feel("sad");
@@ -411,7 +429,7 @@ export default function App() {
       setPet((s) =>
         s.savedFacts.includes(fact) || s.savedFacts.length >= MAX_FACTS
           ? s
-          : applyDelta({ ...s, savedFacts: [...s.savedFacts, fact] }, { friendship: +3 }),
+          : applyDelta({ ...s, savedFacts: [...s.savedFacts, fact] }, { friendship: +3 }, demoRef.current),
       );
       petSays("Got it. I'll remember that.", { chat: true });
     },
@@ -429,7 +447,7 @@ export default function App() {
   // ---- Activities ----
   const onJoke = useCallback(() => {
     petSays(tellJoke(), { chat: true, voice: true });
-    setPet((s) => applyDelta(s, { playfulness: +3, happiness: +3 }));
+    setPet((s) => applyDelta(s, { playfulness: +3, happiness: +3 }, demoRef.current));
     feel("excited");
   }, [petSays, feel]);
 
@@ -444,7 +462,7 @@ export default function App() {
   const onBreakTask = useCallback((task: string) => void sendMessage(`Break this task into steps: ${task}`), [sendMessage]);
 
   const onStudyDone = useCallback(() => {
-    setPet((s) => applyDelta(s, { curiosity: +15, happiness: +8 }));
+    setPet((s) => applyDelta(s, { curiosity: +15, happiness: +8 }, demoRef.current));
     playFx("win");
     feel("excited");
     petSays("Focus session complete! You're getting so smart.", { chat: true, voice: true });
@@ -458,7 +476,12 @@ export default function App() {
   }, [petSays, feel]);
 
   const onBoost = useCallback((t: Trait) => {
-    setPet((s) => applyDelta(s, { [t]: +15 }));
+    setPet((s) => applyDelta(s, { [t]: +15 }, demoRef.current));
+  }, []);
+
+  const setDemoAndSave = useCallback((v: boolean) => {
+    setDemo(v);
+    localStorage.setItem("tama_demo", v ? "1" : "0");
   }, []);
 
   const askNow = useCallback(() => {
@@ -587,7 +610,14 @@ export default function App() {
             petName={pet.petName}
             species={pet.species}
             onPlay={goToPet}
-            onHow={() => go("home", "how")}
+            onHow={() => go("about", "how")}
+          />
+        ) : page === "about" ? (
+          <AboutPage
+            hatched={pet.hatched}
+            petName={pet.petName}
+            species={pet.species}
+            onPlay={goToPet}
           />
         ) : (
           <>
@@ -628,7 +658,7 @@ export default function App() {
 
                 <div className="stage-side">
                   {pet.hatched ? (
-                    <StatusMeters state={pet} brainNote={brainNote} onReset={doReset} age={ageText(pet.bornAt, now.getTime())} />
+                    <StatusMeters state={pet} brainNote={brainNote} onReset={doReset} age={ageText(pet.bornAt, now.getTime())} demo={demo} now={now} />
                   ) : (
                     <HatchCard
                       name={hatchName}
@@ -691,14 +721,14 @@ export default function App() {
                   rl={rl}
                   needs={pet}
                   petName={pet.petName}
-                  fast={fast}
-                  setFast={setFast}
+                  demo={demo}
+                  setDemo={setDemoAndSave}
                   onAskNow={askNow}
                   lastOutcome={lastOutcome}
                   hatched={pet.hatched}
                 />
                 <HabitCard habits={habits} now={now} petName={pet.petName} />
-                <EvolutionCard pet={pet} onBoost={onBoost} />
+                <EvolutionCard pet={pet} onBoost={onBoost} demo={demo} now={now} />
               </Popup>
             )}
 
@@ -749,7 +779,7 @@ export default function App() {
                           onClick={() => {
                             if (pending === "chat") {
                               setPanel("talk");
-                              teach("chat");
+                              // sendMessage will call teach("chat") when the user actually sends
                             } else {
                               doCare(pending);
                               setPanel(null);
@@ -764,7 +794,7 @@ export default function App() {
                           onClick={() => {
                             setRl((r) => expire(r));
                             setLastOutcome("-0.5: you said not now. Noted.");
-                            setLine("");
+                            setLine("Okay, maybe later.");
                             setPanel(null);
                           }}
                         >
