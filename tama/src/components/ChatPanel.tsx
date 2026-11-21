@@ -5,6 +5,7 @@ import { MAX_FACTS } from "../game/petState";
 import { ModeSelector } from "./ModeSelector";
 import { PetSprite } from "./PetSprite";
 import { VoiceControls } from "./VoiceControls";
+import type { VoicePreferences } from "../../../src/voice/voicePreferences";
 
 export type ChatMsg = { id: number; role: "user" | "pet"; text: string };
 
@@ -19,11 +20,19 @@ type Props = {
   onRemember: (text: string) => void;
   isListening: boolean;
   isRecognitionSupported: boolean;
+  isSynthesisSupported: boolean;
   transcript: string;
   voiceError: string | null;
   onMic: () => void;
   muted: boolean;
   setMuted: (m: boolean) => void;
+  voices: SpeechSynthesisVoice[];
+  voicePreferences: VoicePreferences;
+  setVoiceURI: (voiceURI: string) => void;
+  setVoicePitch: (pitch: number) => void;
+  setVoiceRate: (rate: number) => void;
+  onCutePreset: () => void;
+  onPreviewVoice: () => boolean;
   inputRef: React.RefObject<HTMLInputElement | null>;
 };
 
@@ -98,9 +107,17 @@ export function ChatPanel(p: Props) {
         <VoiceControls
           isListening={p.isListening}
           isRecognitionSupported={p.isRecognitionSupported}
+          isSynthesisSupported={p.isSynthesisSupported}
           onMic={p.onMic}
           muted={p.muted}
           setMuted={p.setMuted}
+          voices={p.voices}
+          voicePreferences={p.voicePreferences}
+          setVoiceURI={p.setVoiceURI}
+          setVoicePitch={p.setVoicePitch}
+          setVoiceRate={p.setVoiceRate}
+          onCutePreset={p.onCutePreset}
+          onPreviewVoice={p.onPreviewVoice}
           disabled={p.loading || !p.pet.hatched}
         />
         <button type="submit" className="btn btn-primary" disabled={p.loading || !p.input.trim() || !p.pet.hatched}>
